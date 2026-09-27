@@ -51,12 +51,39 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                 SupabaseClient.authToken = body.accessToken
                 val userId = body.user?.id ?: return@withContext null
                 SupabaseClient.currentUserId = userId
+                SupabaseClient.currentUserEmail = email
+                // Ensure public.users row exists for this user (handles legacy accounts)
+                ensureUserProfileExists(userId, email)
                 return@withContext fetchAndSyncUserProfile(userId, email)
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
         return@withContext null
+    }
+
+    private suspend fun ensureUserProfileExists(userId: String, email: String) {
+        try {
+            val res = SupabaseClient.restApi.getUsers(idFilter = "eq.$userId")
+            if (res.isSuccessful && res.body().isNullOrEmpty()) {
+                // Profile missing — auto-create for existing auth user
+                android.util.Log.d("AUTH", "Profile missing — auto-creating for $userId")
+                val newDto = SupabaseUserDto(
+                    id = userId,
+                    email = email,
+                    displayName = email.substringBefore("@"),
+                    status = "active",
+                    rank = "Bronze",
+                    mmr = 1000,
+                    xp = 0,
+                    walletBalance = 0.0,
+                    referralCode = "REF" + Random.nextInt(1000, 9999)
+                )
+                SupabaseClient.restApi.insertUser(user = newDto)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     suspend fun supabaseSignUp(email: String, pass: String, username: String, refCode: String?): UserEntity? = withContext(Dispatchers.IO) {
@@ -68,6 +95,7 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                 SupabaseClient.authToken = body.accessToken
                 val userId = body.user?.id ?: return@withContext null
                 SupabaseClient.currentUserId = userId
+                SupabaseClient.currentUserEmail = email
 
                 val newDto = SupabaseUserDto(
                     id = userId,
@@ -83,7 +111,9 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
 
                 try {
                     SupabaseClient.restApi.insertUser(user = newDto)
+                    android.util.Log.d("SIGNUP", "✅ Profile created in users table for $userId")
                 } catch (e: Exception) {
+                    android.util.Log.e("SIGNUP", "❌ Failed to insert users row", e)
                     e.printStackTrace()
                 }
 
@@ -394,11 +424,13 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         )
         dao.updateUser(updated)
 
-        // Post to Supabase REST
+        // Post to Supabase REST (user_name is required by RLS policy)
+        val userName = user.displayName.ifBlank { user.email }
         try {
             SupabaseClient.restApi.insertDepositRow(
                 deposit = mapOf(
                     "user_id" to userId,
+                    "user_name" to userName,
                     "amount" to amount,
                     "gateway" to "zapupi",
                     "status" to "PENDING"

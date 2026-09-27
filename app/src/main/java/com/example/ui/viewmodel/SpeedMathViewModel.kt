@@ -102,6 +102,13 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         viewModelScope.launch {
+            // Restore session persisted from a previous app launch
+            val persistedUserId = com.example.data.remote.SupabaseClient.currentUserId
+            val persistedToken = com.example.data.remote.SupabaseClient.authToken
+            if (persistedUserId != null && persistedToken != null) {
+                currentUserId.value = persistedUserId
+                android.util.Log.d("AUTH", "✅ Session restored for userId=$persistedUserId")
+            }
             repository.syncAllRealDataFromSupabase(currentUserId.value)
         }
     }
@@ -133,6 +140,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun logout() {
+        com.example.data.remote.SupabaseClient.clearSession()
         currentUserId.value = null
         viewModelScope.launch {
             _toastEvent.emit(ToastEvent.Show("Signed out successfully."))
