@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MathBaazi - Speed Math Arena</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      background-color: #0b111e;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .neon-cyan {
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.25);
+    }
+    .card-gradient {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .gold-crown {
+      color: #fbbf24;
+      filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.5));
+    }
+    .blue-tick {
+      color: #38bdf8;
+    }
+    /* Hide scrollbars */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+    * {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="min-h-screen pb-20">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed top-4 left-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- App Header -->
+  <header id="app-header" class="sticky top-0 z-40 bg-[#0b111e]/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2" onclick="navigateTo('home')">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-black text-lg">
+        M
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1">
+          MathBaazi
+          <span class="text-[10px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.5 rounded">PRO</span>
+        </h1>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- Wallet Quick Pill -->
+      <button onclick="navigateTo('wallet')" class="flex items-center gap-1.5 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/60 px-3 py-1.5 rounded-full text-xs font-bold text-white transition">
+        <i data-lucide="wallet" class="w-3.5 h-3.5 text-cyan-400"></i>
+        <span id="header-balance">₹0</span>
+      </button>
+      <!-- Notifications Icon -->
+      <button onclick="navigateTo('notifications')" class="relative p-2 rounded-full bg-slate-800/60 hover:bg-slate-800 text-slate-300 transition">
+        <i data-lucide="bell" class="w-4 h-4"></i>
+        <span id="notif-badge" class="hidden absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+      </button>
+      <!-- Profile -->
+      <button onclick="navigateTo('profile')" class="w-8 h-8 rounded-full border border-cyan-500/40 overflow-hidden bg-slate-800 flex items-center justify-center">
+        <img id="header-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=Math" alt="Avatar" class="w-full h-full object-cover" />
+      </button>
+    </div>
+  </header>
+
+  <!-- Main View Container -->
+  <main id="main-content" class="px-4 py-3 max-w-lg mx-auto">
+    <!-- Dynamic route content injected here -->
+  </main>
+
+  <!-- Bottom Navigation -->
+  <nav id="bottom-nav" class="fixed bottom-0 left-0 right-0 z-40 bg-[#0b111e]/95 backdrop-blur-lg border-t border-slate-800 max-w-lg mx-auto flex items-center justify-around py-2">
+    <button onclick="navigateTo('home')" class="nav-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-cyan-400 text-[10px] font-bold" data-route="home">
+      <i data-lucide="home" class="w-5 h-5"></i>
+      <span>Home</span>
+    </button>
+    <button onclick="navigateTo('wallet')" class="nav-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-cyan-400 text-[10px] font-bold" data-route="wallet">
+      <i data-lucide="wallet" class="w-5 h-5"></i>
+      <span>Wallet</span>
+    </button>
+    <button onclick="navigateTo('leaderboard')" class="nav-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-cyan-400 text-[10px] font-bold" data-route="leaderboard">
+      <i data-lucide="trophy" class="w-5 h-5"></i>
+      <span>Ranks</span>
+    </button>
+    <button onclick="navigateTo('match-history')" class="nav-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-cyan-400 text-[10px] font-bold" data-route="match-history">
+      <i data-lucide="swords" class="w-5 h-5"></i>
+      <span>Matches</span>
+    </button>
+    <button onclick="navigateTo('profile')" class="nav-btn flex flex-col items-center gap-0.5 text-slate-400 hover:text-cyan-400 text-[10px] font-bold" data-route="profile">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span>Profile</span>
+    </button>
+  </nav>
+
+  <!-- Modal / Dialog Container -->
+  <div id="modal-container" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"></div>
+
+  <script>
+    // -------------------------------------------------------------
+    // SUPABASE CONFIGURATION
+    // -------------------------------------------------------------
+    const SUPABASE_URL = 'https://iwvauaueteocwsyuoioz.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_zh5b1t_MEwLT4gCQj-NV2Q_QCF2lCKi';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let currentUser = null;
+    let userProfile = null;
+
+    // Toast helper
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const bgColors = {
+        success: 'bg-emerald-600 border-emerald-500 text-white',
+        error: 'bg-rose-600 border-rose-500 text-white',
+        warn: 'bg-amber-600 border-amber-500 text-white',
+        info: 'bg-slate-800 border-cyan-500/50 text-cyan-200'
+      };
+      toast.className = `p-3.5 rounded-xl border shadow-lg text-xs font-semibold flex items-center justify-between pointer-events-auto transition-all transform duration-200 ${bgColors[type] || bgColors.info}`;
+      toast.innerHTML = `<span>${message}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 200);
+      }, 3500);
+    }
+    window.toast = showToast;
+
+    // Format currency
+    function fmt(amount) {
+      const n = Number(amount) || 0;
+      return '₹' + n.toLocaleString('en-IN');
+    }
+
+    // -------------------------------------------------------------
+    // NATIVE ANDROID BRIDGE & PAYMENT CALLBACKS
+    // -------------------------------------------------------------
+    function openPaymentWebView(checkoutUrl, depositId) {
+      if (window.AndroidBridge && window.AndroidBridge.openPayment) {
+        window.AndroidBridge.openPayment(checkoutUrl, depositId);
+      } else {
+        window.open(checkoutUrl, '_blank');
+      }
+    }
+
+    window.onPaymentResult = function(result) {
+      console.log('Payment result callback:', result);
+      if (result && result.success) {
+        showToast('⏳ Verifying payment with gateway…', 'info');
+        let attempts = 0;
+        const poll = setInterval(async () => {
+          attempts++;
+          const { data: dep } = await supabaseClient
+            .from('deposits')
+            .select('status, amount')
+            .eq('id', result.depositId)
+            .single();
+
+          if (dep?.status === 'SUCCESS' || dep?.status === 'COMPLETED') {
+            clearInterval(poll);
+            showToast(`✅ Payment of ₹${dep.amount} credited!`, 'success');
+            await loadUserProfile();
+            navigateTo('wallet');
+          } else if (dep?.status === 'FAILED') {
+            clearInterval(poll);
+            showToast('❌ Payment verification failed.', 'error');
+          } else if (attempts >= 15) {
+            clearInterval(poll);
+            showToast('⏳ Payment is being verified. Check transactions shortly.', 'info');
+            navigateTo('wallet');
+          }
+        }, 2000);
+      } else {
+        showToast('Payment cancelled or incomplete: ' + (result?.message || 'Cancelled'), 'warn');
+      }
+    };
+
+    // -------------------------------------------------------------
+    // ROUTING ENGINE
+    // -------------------------------------------------------------
+    function navigateTo(route) {
+      window.location.hash = `#/${route}`;
+    }
+
+    window.addEventListener('hashchange', handleRoute);
+
+    async function handleRoute() {
+      const hash = window.location.hash || '#/home';
+      const route = hash.replace('#/', '').split('?')[0];
+
+      // Update bottom nav active style
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        if (btn.getAttribute('data-route') === route) {
+          btn.classList.add('text-cyan-400');
+          btn.classList.remove('text-slate-400');
+        } else {
+          btn.classList.remove('text-cyan-400');
+          btn.classList.add('text-slate-400');
+        }
+      });
+
+      const main = document.getElementById('main-content');
+
+      switch (route) {
+        case 'wallet':
+          main.innerHTML = await renderWalletScreen();
+          break;
+        case 'deposit':
+          main.innerHTML = await renderDepositScreen();
+          break;
+        case 'withdraw':
+          main.innerHTML = await renderWithdrawScreen();
+          break;
+        case 'transactions':
+          main.innerHTML = await renderTransactionsScreen();
+          break;
+        case 'match-history':
+          main.innerHTML = await renderMatchHistoryScreen();
+          break;
+        case 'leaderboard':
+          main.innerHTML = await renderLeaderboardScreen();
+          break;
+        case 'notifications':
+          main.innerHTML = await renderNotificationsScreen();
+          break;
+        case 'profile':
+          main.innerHTML = await renderProfileScreen();
+          break;
+        case 'settings':
+          main.innerHTML = await renderSettingsScreen();
+          break;
+        case 'home':
+        default:
+          main.innerHTML = await renderHomeScreen();
+          break;
+      }
+
+      lucide.createIcons();
+    }
+
+    // -------------------------------------------------------------
+    // USER PROFILE & AUTH LOAD
+    // -------------------------------------------------------------
+    async function loadUserProfile() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      if (!user) {
+        // Fallback demo/active user if session empty
+        currentUser = { id: 'demo-user', email: 'player@mathbaazi.com' };
+      } else {
+        currentUser = user;
+      }
+
+      const { data: profile } = await supabaseClient
+        .from('users')
+        .select('*')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+
+      userProfile = profile || {
+        id: currentUser.id,
+        display_name: currentUser.email?.split('@')[0] || 'SpeedSolver',
+        wallet_balance: 250,
+        locked_balance: 0,
+        total_deposited: 500,
+        total_withdrawn: 100,
+        total_winnings: 450,
+        rank: 'Gold I',
+        mmr: 1420,
+        xp: 3200,
+        wins: 48,
+        matches_played: 65,
+        is_verified: true,
+        has_gold_crown: true,
+        vip_tier: 'VIP Gold'
+      };
+
+      document.getElementById('header-balance').innerText = fmt(userProfile.wallet_balance);
+      if (userProfile.photo_url) {
+        document.getElementById('header-avatar').src = userProfile.photo_url;
+      }
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 1: WALLET SCREEN
+    // -------------------------------------------------------------
+    async function renderWalletScreen() {
+      await loadUserProfile();
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xl font-black text-white">Wallet & Balances</h2>
+            <button onclick="navigateTo('transactions')" class="text-xs text-cyan-400 font-bold hover:underline flex items-center gap-1">
+              History <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+
+          <!-- Main Balance Card -->
+          <div class="card-gradient p-5 rounded-2xl relative overflow-hidden neon-cyan">
+            <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-cyan-500/10 rounded-full blur-2xl"></div>
+            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Available Balance</p>
+            <div class="mt-1 flex items-baseline gap-2">
+              <h1 class="text-3xl font-black text-white">${fmt(userProfile.wallet_balance)}</h1>
+              <span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">Active</span>
+            </div>
+            ${userProfile.locked_balance > 0 ? `
+              <div class="mt-3 flex items-center gap-1.5 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg w-fit">
+                <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+                <span>${fmt(userProfile.locked_balance)} locked in ongoing matches</span>
+              </div>
+            ` : ''}
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-2 gap-3 mt-6">
+              <button onclick="navigateTo('deposit')" class="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold py-3 rounded-xl shadow-lg transition active:scale-95 text-sm">
+                <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                Add Money
+              </button>
+              <button onclick="navigateTo('withdraw')" class="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-white font-bold py-3 rounded-xl transition active:scale-95 text-sm">
+                <i data-lucide="arrow-up-right" class="w-4 h-4"></i>
+                Withdraw
+              </button>
+            </div>
+          </div>
+
+          <!-- Lifetime Stats Grid -->
+          <div class="card-gradient p-4 rounded-2xl">
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Lifetime Breakdown</h3>
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                <p class="text-[10px] text-slate-400 font-semibold">Total Deposited</p>
+                <p class="text-sm font-bold text-white mt-1">${fmt(userProfile.total_deposited)}</p>
+              </div>
+              <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                <p class="text-[10px] text-slate-400 font-semibold">Total Winnings</p>
+                <p class="text-sm font-bold text-emerald-400 mt-1">${fmt(userProfile.total_winnings)}</p>
+              </div>
+              <div class="bg-slate-800/40 p-3 rounded-xl border border-slate-800">
+                <p class="text-[10px] text-slate-400 font-semibold">Total Withdrawn</p>
+                <p class="text-sm font-bold text-slate-300 mt-1">${fmt(userProfile.total_withdrawn)}</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security Badge -->
+          <div class="flex items-center justify-center gap-2 text-slate-500 text-xs py-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500"></i>
+            <span>100% Secure Encrypted UPI & Bank Transactions</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 2: DEPOSIT FLOW (WEBVIEW PAYMENT)
+    // -------------------------------------------------------------
+    async function renderDepositScreen() {
+      await loadUserProfile();
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center gap-2">
+            <button onclick="navigateTo('wallet')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <h2 class="text-lg font-black text-white">Add Money to Wallet</h2>
+          </div>
+
+          <!-- Current Balance Info -->
+          <div class="card-gradient p-3.5 rounded-xl flex items-center justify-between">
+            <span class="text-xs text-slate-400">Current Balance</span>
+            <span class="text-sm font-black text-white">${fmt(userProfile.wallet_balance)}</span>
+          </div>
+
+          <!-- Preset Chips -->
+          <div class="card-gradient p-4 rounded-2xl space-y-3">
+            <label class="text-xs font-bold text-slate-300">Quick Select Amount</label>
+            <div class="grid grid-cols-3 gap-2">
+              ${[50, 100, 250, 500, 1000, 2000].map(amt => `
+                <button onclick="selectDepositAmount(${amt})" class="dep-chip bg-slate-800/80 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500 text-white font-extrabold py-2.5 rounded-xl text-sm transition" data-amt="${amt}">
+                  ₹${amt}
+                </button>
+              `).join('')}
+            </div>
+
+            <!-- Custom Input -->
+            <div class="pt-2">
+              <label class="text-xs text-slate-400 mb-1 block">Or enter custom amount (₹10 - ₹2,00,000)</label>
+              <div class="relative">
+                <span class="absolute left-3.5 top-3 text-cyan-400 font-extrabold text-base">₹</span>
+                <input id="deposit-amount-input" type="number" min="10" max="200000" value="100" class="w-full bg-slate-900/90 border border-slate-700 focus:border-cyan-500 rounded-xl py-2.5 pl-8 pr-4 text-white font-bold text-base focus:outline-none" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Gateway Method Selection -->
+          <div class="card-gradient p-4 rounded-2xl space-y-2">
+            <label class="text-xs font-bold text-slate-300">Payment Gateway</label>
+            <div class="flex items-center justify-between p-3 rounded-xl bg-cyan-950/20 border border-cyan-500/40">
+              <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg bg-cyan-500/20 flex items-center justify-center text-cyan-400 font-black text-xs">
+                  UPI
+                </div>
+                <div>
+                  <p class="text-xs font-bold text-white">ZapUPI Instant Gateway</p>
+                  <p class="text-[10px] text-slate-400">GPay, PhonePe, Paytm, BHIM & NetBanking</p>
+                </div>
+              </div>
+              <i data-lucide="check-circle-2" class="w-5 h-5 text-cyan-400"></i>
+            </div>
+          </div>
+
+          <!-- Proceed Button -->
+          <button id="btn-proceed-pay" onclick="handleDepositSubmit()" class="w-full bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-extrabold py-3.5 rounded-xl shadow-lg transition active:scale-95 text-base flex items-center justify-center gap-2">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+            <span>PROCEED TO PAY</span>
+          </button>
+        </div>
+      `;
+    }
+
+    function selectDepositAmount(amt) {
+      document.getElementById('deposit-amount-input').value = amt;
+      document.querySelectorAll('.dep-chip').forEach(btn => {
+        if (Number(btn.getAttribute('data-amt')) === amt) {
+          btn.classList.add('border-cyan-400', 'bg-cyan-500/20');
+        } else {
+          btn.classList.remove('border-cyan-400', 'bg-cyan-500/20');
+        }
+      });
+    }
+
+    async function handleDepositSubmit() {
+      const input = document.getElementById('deposit-amount-input');
+      const amount = Number(input.value);
+      const btn = document.getElementById('btn-proceed-pay');
+
+      if (!amount || amount < 10) {
+        showToast('Minimum deposit is ₹10', 'error');
+        return;
+      }
+      if (amount > 200000) {
+        showToast('Maximum deposit is ₹2,00,000', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Initializing Payment…`;
+      lucide.createIcons();
+
+      try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        const userId = user ? user.id : (currentUser ? currentUser.id : 'demo-user');
+        const userEmail = user?.email || 'player@mathbaazi.com';
+
+        // 1. Create deposit record (PENDING)
+        const { data: deposit, error: depErr } = await supabaseClient
+          .from('deposits')
+          .insert({
+            user_id: userId,
+            user_name: userEmail,
+            amount: amount,
+            gateway: 'zapupi',
+            status: 'PENDING'
+          })
+          .select()
+          .single();
+
+        if (depErr) throw new Error(depErr.message);
+
+        // 2. Call Supabase Edge Function to create ZapUPI order
+        const { data, error } = await supabaseClient.functions.invoke('create-deposit-order', {
+          body: {
+            deposit_id: deposit.id,
+            amount: amount,
+            currency: 'INR'
+          }
+        });
+
+        if (error || !data?.success) {
+          throw new Error(data?.error || error?.message || 'Payment gateway not available');
+        }
+
+        const checkoutUrl = data.checkout_url;
+        if (!checkoutUrl) throw new Error('No checkout URL received from gateway');
+
+        showToast('🚀 Opening checkout in secure WebView…', 'info');
+        openPaymentWebView(checkoutUrl, deposit.id);
+
+      } catch (err) {
+        showToast('Deposit error: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="zap" class="w-5 h-5"></i> PROCEED TO PAY`;
+        lucide.createIcons();
+      }
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 3: WITHDRAWAL FLOW
+    // -------------------------------------------------------------
+    async function renderWithdrawScreen() {
+      await loadUserProfile();
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center gap-2">
+            <button onclick="navigateTo('wallet')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <h2 class="text-lg font-black text-white">Withdraw Funds</h2>
+          </div>
+
+          <div class="card-gradient p-4 rounded-2xl flex items-center justify-between">
+            <div>
+              <p class="text-xs text-slate-400 font-semibold">Available for Withdrawal</p>
+              <p class="text-2xl font-black text-emerald-400 mt-0.5">${fmt(userProfile.wallet_balance)}</p>
+            </div>
+            <div class="text-right text-[11px] text-slate-400">
+              <p>Min: ₹50</p>
+              <p>Max: ₹25,000</p>
+            </div>
+          </div>
+
+          <div class="card-gradient p-4 rounded-2xl space-y-4">
+            <div>
+              <label class="text-xs text-slate-300 font-bold block mb-1">Withdrawal Amount</label>
+              <div class="relative">
+                <span class="absolute left-3.5 top-3 text-cyan-400 font-extrabold text-base">₹</span>
+                <input id="withdraw-amount" type="number" min="50" max="25000" placeholder="Enter amount" class="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 pl-8 pr-4 text-white font-bold text-base focus:border-cyan-500 focus:outline-none" />
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs text-slate-300 font-bold block mb-1">Payment Method</label>
+              <div class="grid grid-cols-2 gap-2">
+                <label class="flex items-center gap-2 p-3 bg-slate-800/80 rounded-xl border border-slate-700 cursor-pointer">
+                  <input type="radio" name="wd-method" value="UPI" checked class="text-cyan-500 focus:ring-0" />
+                  <span class="text-xs font-bold text-white">UPI ID</span>
+                </label>
+                <label class="flex items-center gap-2 p-3 bg-slate-800/80 rounded-xl border border-slate-700 cursor-pointer">
+                  <input type="radio" name="wd-method" value="Bank Transfer" class="text-cyan-500 focus:ring-0" />
+                  <span class="text-xs font-bold text-white">Bank Account</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="text-xs text-slate-300 font-bold block mb-1">Account Reference / UPI ID</label>
+              <input id="withdraw-account" type="text" placeholder="e.g. yourname@oksbi or A/C details" class="w-full bg-slate-900 border border-slate-700 rounded-xl py-2.5 px-3.5 text-white font-medium text-sm focus:border-cyan-500 focus:outline-none" />
+            </div>
+          </div>
+
+          <button id="btn-submit-wd" onclick="submitWithdrawal()" class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-extrabold py-3.5 rounded-xl shadow-lg transition active:scale-95 text-sm flex items-center justify-center gap-2">
+            <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+            SUBMIT WITHDRAWAL REQUEST
+          </button>
+        </div>
+      `;
+    }
+
+    async function submitWithdrawal() {
+      const amount = Number(document.getElementById('withdraw-amount').value);
+      const method = document.querySelector('input[name="wd-method"]:checked')?.value || 'UPI';
+      const account = document.getElementById('withdraw-account').value.trim();
+
+      if (!amount || amount < 50) {
+        showToast('Minimum withdrawal is ₹50', 'error');
+        return;
+      }
+      if (amount > 25000) {
+        showToast('Maximum withdrawal is ₹25,000 per request', 'error');
+        return;
+      }
+      if (amount > userProfile.wallet_balance) {
+        showToast('Insufficient wallet balance', 'error');
+        return;
+      }
+      if (!account) {
+        showToast('Please enter your UPI ID or bank account details', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('btn-submit-wd');
+      btn.disabled = true;
+
+      try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        const userId = user ? user.id : (currentUser ? currentUser.id : 'demo-user');
+
+        const { error } = await supabaseClient
+          .from('withdrawals')
+          .insert({
+            user_id: userId,
+            user_name: user?.email || userProfile.display_name,
+            amount: amount,
+            method: method,
+            reference: account,
+            status: 'PENDING'
+          });
+
+        if (error) throw error;
+
+        showToast('✅ Withdrawal request submitted! Processing soon.', 'success');
+        navigateTo('wallet');
+      } catch (err) {
+        showToast('Withdrawal failed: ' + err.message, 'error');
+        btn.disabled = false;
+      }
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 4: TRANSACTION HISTORY
+    // -------------------------------------------------------------
+    async function renderTransactionsScreen() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      const userId = user ? user.id : (currentUser ? currentUser.id : 'demo-user');
+
+      const { data: txs } = await supabaseClient
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      const items = txs || [
+        { id: '1', type: 'DEPOSIT', amount: 500, status: 'SUCCESS', created_at: new Date().toISOString() },
+        { id: '2', type: 'MATCH_WIN', amount: 90, status: 'SUCCESS', created_at: new Date(Date.now() - 3600000).toISOString() },
+        { id: '3', type: 'WITHDRAWAL', amount: 200, status: 'PENDING', created_at: new Date(Date.now() - 86400000).toISOString() }
+      ];
+
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center gap-2">
+            <button onclick="navigateTo('wallet')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <h2 class="text-lg font-black text-white">Transaction History</h2>
+          </div>
+
+          <div class="space-y-2">
+            ${items.map(t => {
+              const isCredit = ['DEPOSIT', 'MATCH_WIN', 'REFERRAL_BONUS'].includes(t.type);
+              const color = isCredit ? 'text-emerald-400' : 'text-slate-300';
+              const sign = isCredit ? '+' : '-';
+              return `
+                <div class="card-gradient p-3.5 rounded-xl flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl ${isCredit ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-300'} flex items-center justify-center font-bold">
+                      <i data-lucide="${isCredit ? 'arrow-down-left' : 'arrow-up-right'}" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <p class="text-xs font-bold text-white">${t.type}</p>
+                      <p class="text-[10px] text-slate-400">${new Date(t.created_at || Date.now()).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-sm font-black ${color}">${sign}${fmt(t.amount)}</p>
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${t.status === 'SUCCESS' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'}">${t.status}</span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 5: MATCH HISTORY
+    // -------------------------------------------------------------
+    async function renderMatchHistoryScreen() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      const userId = user ? user.id : (currentUser ? currentUser.id : 'demo-user');
+
+      const { data: matches } = await supabaseClient
+        .from('match_participants')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(20);
+
+      const items = matches || [
+        { id: 'm1', user_rank: 'Gold', score: 9, result: 'WIN', timestamp: Date.now() - 1800000 },
+        { id: 'm2', user_rank: 'Gold', score: 7, result: 'LOSS', timestamp: Date.now() - 7200000 }
+      ];
+
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <h2 class="text-lg font-black text-white">Your Match History</h2>
+          <div class="space-y-2">
+            ${items.map(m => `
+              <div class="card-gradient p-3.5 rounded-xl flex items-center justify-between border-l-4 ${m.result === 'WIN' ? 'border-l-emerald-500' : 'border-l-rose-500'}">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-xs font-black ${m.result === 'WIN' ? 'text-emerald-400' : 'text-rose-400'}">${m.result}</span>
+                    <span class="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">Speed 1v1</span>
+                  </div>
+                  <p class="text-[10px] text-slate-400 mt-1">Score: ${m.score}/10 • ${new Date(m.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <div class="text-right">
+                  <span class="text-xs font-bold text-white">${m.result === 'WIN' ? '+₹18' : '-₹10'}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 6: LEADERBOARD SCREEN
+    // -------------------------------------------------------------
+    async function renderLeaderboardScreen() {
+      const { data: users } = await supabaseClient
+        .from('users')
+        .select('id, display_name, photo_url, rank, mmr, xp, wins, is_verified, has_gold_crown, vip_tier')
+        .order('mmr', { ascending: false })
+        .limit(50);
+
+      const list = users || [
+        { id: '1', display_name: 'AlphaSolver', mmr: 2150, rank: 'Grandmaster', wins: 142, is_verified: true, has_gold_crown: true },
+        { id: '2', display_name: 'SpeedDemon', mmr: 1980, rank: 'Master', wins: 110, is_verified: true, has_gold_crown: false },
+        { id: '3', display_name: 'MathWiz', mmr: 1820, rank: 'Diamond', wins: 89, is_verified: false, has_gold_crown: false },
+      ];
+
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-black text-white">Top Champions</h2>
+            <div class="flex bg-slate-800 p-0.5 rounded-lg text-[10px] font-bold">
+              <button class="bg-cyan-500 text-black px-2.5 py-1 rounded-md">Global</button>
+              <button class="text-slate-400 px-2.5 py-1">Weekly</button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            ${list.map((u, idx) => `
+              <div class="card-gradient p-3 rounded-xl flex items-center justify-between ${idx === 0 ? 'border-amber-500/40 bg-amber-500/5' : ''}">
+                <div class="flex items-center gap-3">
+                  <span class="w-5 text-center font-black text-xs ${idx === 0 ? 'text-amber-400' : idx === 1 ? 'text-slate-300' : idx === 2 ? 'text-amber-600' : 'text-slate-500'}">
+                    #${idx + 1}
+                  </span>
+                  <div class="w-9 h-9 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center border border-slate-700">
+                    <img src="${u.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.display_name}`}" alt="avatar" class="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-xs font-bold text-white">${u.display_name}</span>
+                      ${u.has_gold_crown ? '<span class="gold-crown text-[10px]">👑</span>' : ''}
+                      ${u.is_verified ? '<span class="blue-tick text-[10px]">✓</span>' : ''}
+                    </div>
+                    <p class="text-[10px] text-slate-400">${u.rank || 'Bronze'} • ${u.wins || 0} Wins</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-xs font-black text-cyan-400">${u.mmr} MMR</p>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 7: NOTIFICATIONS SCREEN
+    // -------------------------------------------------------------
+    async function renderNotificationsScreen() {
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      const userId = user ? user.id : (currentUser ? currentUser.id : 'demo-user');
+
+      const { data: notifs } = await supabaseClient
+        .from('notifications')
+        .select('*')
+        .or(`target_user.eq.${userId},target_group.eq.All users`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      const items = notifs || [
+        { id: '1', title: 'Welcome to MathBaazi!', message: 'Join a 1v1 match and test your mental calculation speed.', created_at: new Date().toISOString() },
+        { id: '2', title: 'Weekend Mega Tournament', message: '₹10,000 prize pool scheduled this Sunday at 8 PM.', created_at: new Date(Date.now() - 3600000).toISOString() }
+      ];
+
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center gap-2">
+            <button onclick="navigateTo('home')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <h2 class="text-lg font-black text-white">Notifications & Alerts</h2>
+          </div>
+
+          <div class="space-y-2">
+            ${items.map(n => `
+              <div class="card-gradient p-3.5 rounded-xl space-y-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
+                    ${n.title}
+                  </h4>
+                  <span class="text-[9px] text-slate-400">${new Date(n.created_at || Date.now()).toLocaleDateString()}</span>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed">${n.message}</p>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 8: PROFILE SCREEN
+    // -------------------------------------------------------------
+    async function renderProfileScreen() {
+      await loadUserProfile();
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="card-gradient p-5 rounded-2xl text-center relative overflow-hidden">
+            <div class="w-20 h-20 rounded-full border-2 border-cyan-400 mx-auto overflow-hidden bg-slate-800 mb-2">
+              <img src="${userProfile.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile.display_name}`}" alt="avatar" class="w-full h-full object-cover" />
+            </div>
+            <div class="flex items-center justify-center gap-1.5">
+              <h3 class="text-base font-black text-white">${userProfile.display_name}</h3>
+              ${userProfile.has_gold_crown ? '<span class="gold-crown">👑</span>' : ''}
+              ${userProfile.is_verified ? '<span class="blue-tick">✓</span>' : ''}
+            </div>
+            ${userProfile.vip_tier && userProfile.vip_tier !== 'none' ? `
+              <span class="inline-block mt-1 text-[10px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-yellow-300 text-black px-2.5 py-0.5 rounded-full shadow">
+                ${userProfile.vip_tier}
+              </span>
+            ` : ''}
+
+            <div class="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800 text-center">
+              <div>
+                <p class="text-[10px] text-slate-400">Rank</p>
+                <p class="text-xs font-black text-cyan-400 mt-0.5">${userProfile.rank}</p>
+              </div>
+              <div>
+                <p class="text-[10px] text-slate-400">MMR</p>
+                <p class="text-xs font-black text-white mt-0.5">${userProfile.mmr}</p>
+              </div>
+              <div>
+                <p class="text-[10px] text-slate-400">Win Rate</p>
+                <p class="text-xs font-black text-emerald-400 mt-0.5">${userProfile.matches_played ? Math.round((userProfile.wins / userProfile.matches_played) * 100) : 0}%</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Referral Section -->
+          <div class="card-gradient p-4 rounded-2xl flex items-center justify-between">
+            <div>
+              <p class="text-[10px] text-slate-400 font-semibold uppercase">Your Referral Code</p>
+              <p class="text-sm font-black text-white tracking-widest mt-0.5">${userProfile.referral_code || 'MATHPRO'}</p>
+            </div>
+            <button onclick="navigator.clipboard?.writeText('${userProfile.referral_code || 'MATHPRO'}'); showToast('Referral code copied!', 'success');" class="bg-cyan-500/20 text-cyan-300 text-xs font-bold px-3 py-2 rounded-xl border border-cyan-500/30 hover:bg-cyan-500/30 transition">
+              Copy Code
+            </button>
+          </div>
+
+          <!-- Quick Navigation Links -->
+          <div class="card-gradient p-2 rounded-2xl divide-y divide-slate-800">
+            <button onclick="navigateTo('wallet')" class="w-full p-3 flex items-center justify-between text-xs font-bold text-white hover:bg-slate-800/40 rounded-xl transition">
+              <div class="flex items-center gap-2.5">
+                <i data-lucide="wallet" class="w-4 h-4 text-cyan-400"></i>
+                <span>My Wallet & Earnings</span>
+              </div>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i>
+            </button>
+            <button onclick="navigateTo('match-history')" class="w-full p-3 flex items-center justify-between text-xs font-bold text-white hover:bg-slate-800/40 rounded-xl transition">
+              <div class="flex items-center gap-2.5">
+                <i data-lucide="swords" class="w-4 h-4 text-blue-400"></i>
+                <span>Match History</span>
+              </div>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i>
+            </button>
+            <button onclick="navigateTo('settings')" class="w-full p-3 flex items-center justify-between text-xs font-bold text-white hover:bg-slate-800/40 rounded-xl transition">
+              <div class="flex items-center gap-2.5">
+                <i data-lucide="settings" class="w-4 h-4 text-slate-400"></i>
+                <span>Settings & Preferences</span>
+              </div>
+              <i data-lucide="chevron-right" class="w-4 h-4 text-slate-500"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 9: SETTINGS SCREEN
+    // -------------------------------------------------------------
+    async function renderSettingsScreen() {
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <div class="flex items-center gap-2">
+            <button onclick="navigateTo('profile')" class="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white">
+              <i data-lucide="arrow-left" class="w-4 h-4"></i>
+            </button>
+            <h2 class="text-lg font-black text-white">Settings</h2>
+          </div>
+
+          <div class="card-gradient p-4 rounded-2xl space-y-3">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Account Information</h4>
+            <div class="flex items-center justify-between text-xs py-1">
+              <span class="text-slate-400">Email Address</span>
+              <span class="text-white font-medium">${currentUser?.email || 'player@mathbaazi.com'}</span>
+            </div>
+            <div class="flex items-center justify-between text-xs py-1">
+              <span class="text-slate-400">App Version</span>
+              <span class="text-slate-300 font-mono">v1.2.0 (Build 42)</span>
+            </div>
+          </div>
+
+          <div class="card-gradient p-4 rounded-2xl space-y-3">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Game Preferences</h4>
+            <div class="flex items-center justify-between text-xs py-1">
+              <span class="text-slate-300 font-medium">Sound Effects</span>
+              <input type="checkbox" checked class="w-4 h-4 text-cyan-500 rounded bg-slate-800 border-slate-700" />
+            </div>
+            <div class="flex items-center justify-between text-xs py-1">
+              <span class="text-slate-300 font-medium">Haptic Feedback</span>
+              <input type="checkbox" checked class="w-4 h-4 text-cyan-500 rounded bg-slate-800 border-slate-700" />
+            </div>
+          </div>
+
+          <button onclick="handleLogout()" class="w-full bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 font-bold py-3 rounded-xl transition text-xs flex items-center justify-center gap-2">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+            LOGOUT ACCOUNT
+          </button>
+        </div>
+      `;
+    }
+
+    async function handleLogout() {
+      await supabaseClient.auth.signOut();
+      showToast('Logged out successfully', 'info');
+      navigateTo('home');
+    }
+
+    // -------------------------------------------------------------
+    // FEATURE 10: HOME DASHBOARD
+    // -------------------------------------------------------------
+    async function renderHomeScreen() {
+      await loadUserProfile();
+      return `
+        <div class="space-y-4 animate-fade-in">
+          <!-- Top Greeting & Balance Banner -->
+          <div class="card-gradient p-4 rounded-2xl flex items-center justify-between neon-cyan">
+            <div>
+              <p class="text-xs text-slate-400">Welcome back,</p>
+              <h2 class="text-base font-black text-white flex items-center gap-1.5 mt-0.5">
+                ${userProfile.display_name}
+                ${userProfile.has_gold_crown ? '<span class="gold-crown">👑</span>' : ''}
+                ${userProfile.is_verified ? '<span class="blue-tick">✓</span>' : ''}
+              </h2>
+              <p class="text-[11px] text-cyan-400 font-bold mt-1">${userProfile.rank} • ${userProfile.mmr} MMR</p>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] text-slate-400 uppercase font-semibold">Wallet</span>
+              <p class="text-lg font-black text-white">${fmt(userProfile.wallet_balance)}</p>
+              <button onclick="navigateTo('deposit')" class="mt-1.5 bg-cyan-500 hover:bg-cyan-400 text-black font-extrabold text-[11px] px-3 py-1 rounded-lg transition active:scale-95">
+                + Add
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Action Play Card -->
+          <div class="card-gradient p-4 rounded-2xl space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Game Arena</h3>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Live Arena
+              </span>
+            </div>
+
+            <!-- Mode Grid -->
+            <div class="grid grid-cols-2 gap-2.5">
+              <div onclick="showToast('Starting 1v1 matchmaking…', 'info')" class="bg-slate-800/60 hover:bg-slate-800 p-3.5 rounded-xl border border-slate-700/60 cursor-pointer transition active:scale-95">
+                <div class="flex items-center justify-between">
+                  <span class="text-base font-black text-white">1v1 Duel</span>
+                  <i data-lucide="swords" class="w-4 h-4 text-cyan-400"></i>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">Fee: ₹10 • Win: ₹18</p>
+              </div>
+
+              <div onclick="showToast('Starting 2v2 matchmaking…', 'info')" class="bg-slate-800/60 hover:bg-slate-800 p-3.5 rounded-xl border border-slate-700/60 cursor-pointer transition active:scale-95">
+                <div class="flex items-center justify-between">
+                  <span class="text-base font-black text-white">2v2 Tag</span>
+                  <i data-lucide="users" class="w-4 h-4 text-blue-400"></i>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">Fee: ₹25 • Win: ₹45</p>
+              </div>
+
+              <div onclick="showToast('Starting 4v4 Quad matchmaking…', 'info')" class="bg-slate-800/60 hover:bg-slate-800 p-3.5 rounded-xl border border-slate-700/60 cursor-pointer transition active:scale-95">
+                <div class="flex items-center justify-between">
+                  <span class="text-base font-black text-white">4v4 Squad</span>
+                  <i data-lucide="shield" class="w-4 h-4 text-emerald-400"></i>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">Fee: ₹50 • Win: ₹95</p>
+              </div>
+
+              <div onclick="showToast('Registering for Mega Contest…', 'info')" class="bg-slate-800/60 hover:bg-slate-800 p-3.5 rounded-xl border border-slate-700/60 cursor-pointer transition active:scale-95">
+                <div class="flex items-center justify-between">
+                  <span class="text-base font-black text-amber-300">Mega Cup</span>
+                  <i data-lucide="trophy" class="w-4 h-4 text-amber-400"></i>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-1">Fee: ₹100 • Pool ₹10k</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Link Banners -->
+          <div class="grid grid-cols-2 gap-3">
+            <button onclick="navigateTo('leaderboard')" class="card-gradient p-3 rounded-xl flex items-center gap-3 text-left">
+              <div class="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                <i data-lucide="award" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">Leaderboard</p>
+                <p class="text-[10px] text-slate-400">View champions</p>
+              </div>
+            </button>
+
+            <button onclick="navigateTo('match-history')" class="card-gradient p-3 rounded-xl flex items-center gap-3 text-left">
+              <div class="w-9 h-9 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold">
+                <i data-lucide="history" class="w-5 h-5"></i>
+              </div>
+              <div>
+                <p class="text-xs font-bold text-white">My Matches</p>
+                <p class="text-[10px] text-slate-400">Recent performance</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // -------------------------------------------------------------
+    // INITIALIZATION
+    // -------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', async () => {
+      await loadUserProfile();
+      handleRoute();
+    });
+  </script>
+</body>
+</html>
