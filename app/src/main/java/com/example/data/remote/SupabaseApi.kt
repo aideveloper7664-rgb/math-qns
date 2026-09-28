@@ -152,3 +152,20 @@ interface SupabaseRestApi {
         @Query("select") select: String = "*"
     ): Response<List<SupabaseSettingDto>>
 }
+
+interface SupabaseMatchmakingApi {
+    @POST("functions/v1/join-matchmaking")
+    suspend fun joinMatchmaking(
+        @Body request: JoinMatchmakingRequest
+    ): retrofit2.Response<JoinMatchmakingResponse>
+
+    @POST("functions/v1/cancel-matchmaking")
+    suspend fun cancelMatchmaking(): retrofit2.Response<CancelMatchmakingResponse>
+
+    @GET("rest/v1/matchmaking_queue")
+    suspend fun pollQueue(
+        @Query("user_id") userIdFilter: String, // e.g. "eq.<uuid>"
+        @Query("select") select: String = "id,user_id,status,match_id",
+        @Query("limit") limit: Int = 1
+    ): retrofit2.Response<List<MatchmakingQueueDto>>
+}

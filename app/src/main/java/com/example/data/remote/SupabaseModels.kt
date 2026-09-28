@@ -242,3 +242,36 @@ data class ZapUpiStatusResponse(
     @Json(name = "txn_id") val txnId: String? = null,
     @Json(name = "amount") val amount: String? = null
 )
+
+// ─── Matchmaking Models ───────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class JoinMatchmakingRequest(
+    @Json(name = "game_mode") val gameMode: String,
+    @Json(name = "entry_fee") val entryFee: Double
+)
+
+@JsonClass(generateAdapter = true)
+data class JoinMatchmakingResponse(
+    @Json(name = "success") val success: Boolean = false,
+    @Json(name = "matched") val matched: Boolean = false,
+    @Json(name = "match_id") val matchId: String? = null,
+    @Json(name = "queue_id") val queueId: String? = null,
+    @Json(name = "message") val message: String? = null,
+    @Json(name = "error") val error: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class CancelMatchmakingResponse(
+    @Json(name = "success") val success: Boolean = false,
+    @Json(name = "refunded") val refunded: Boolean = false,
+    @Json(name = "error") val error: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MatchmakingQueueDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "user_id") val userId: String,
+    @Json(name = "status") val status: String,
+    @Json(name = "match_id") val matchId: String? = null
+)

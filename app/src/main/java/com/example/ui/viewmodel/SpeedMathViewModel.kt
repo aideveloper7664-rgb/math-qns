@@ -159,8 +159,24 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    private val matchmakingRepo = com.example.data.repository.MatchmakingRepository()
+    private var matchmakingJob: Job? = null
+    private var matchmakingTimerJob: Job? = null
+
+    // Elapsed search time shown on UI (seconds)
+    val matchmakingElapsed = MutableStateFlow(0)
+
+    // Fired when a real match_id arrives — UI navigates to game
+    private val _matchFoundEvent = MutableSharedFlow<String>()
+    val matchFoundEvent: SharedFlow<String> = _matchFoundEvent.asSharedFlow()
+
     fun startMatchmaking(mode: String, entryFee: Double) {
-        val user = currentUser.value ?: return
+        val user = currentUser.value ?: run {
+            viewModelScope.launch {
+                _toastEvent.emit(ToastEvent.Show("Please sign in first.", true))
+            }
+            return
+        }
         if (entryFee > 0 && user.walletBalance < entryFee) {
             viewModelScope.launch {
                 _toastEvent.emit(ToastEvent.Show("Insufficient wallet balance.", true))
@@ -168,6 +184,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
+        // Set UI to searching state
         _gameState.value = GameState(
             active = false,
             isMatchmaking = true,
@@ -175,17 +192,71 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             entryFee = entryFee,
             isPractice = false
         )
+        matchmakingElapsed.value = 0
 
-        viewModelScope.launch {
-            delay(2000)
-            if (_gameState.value.isMatchmaking) {
-                startMatchGame(mode, entryFee, false)
+        // Timer — increments every second for UI display
+        matchmakingTimerJob?.cancel()
+        matchmakingTimerJob = viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                matchmakingElapsed.value += 1
+            }
+        }
+
+        // Real matchmaking call + polling
+        matchmakingJob?.cancel()
+        matchmakingJob = viewModelScope.launch {
+            val userId = user.id
+
+            // 1. Call Edge Function to join queue
+            val joinResp = matchmakingRepo.joinMatchmaking(mode, entryFee)
+
+            if (!joinResp.success && joinResp.error != null) {
+                // Edge Function rejected — show error, reset state
+                _gameState.value = GameState()
+                matchmakingTimerJob?.cancel()
+                _toastEvent.emit(ToastEvent.Show(joinResp.error, true))
+                return@launch
+            }
+
+            if (joinResp.matched && !joinResp.matchId.isNullOrBlank()) {
+                // Instantly matched (someone was already waiting)
+                handleMatchFound(joinResp.matchId, mode, entryFee)
+                return@launch
+            }
+
+            // 2. Not yet matched — poll until status = "matched"
+            matchmakingRepo.observeMatchFound(userId).collect { matchId ->
+                if (matchId.isBlank()) {
+                    // Timed out
+                    _gameState.value = GameState()
+                    matchmakingTimerJob?.cancel()
+                    _toastEvent.emit(ToastEvent.Show("No opponent found. Try again!", true))
+                } else {
+                    handleMatchFound(matchId, mode, entryFee)
+                }
             }
         }
     }
 
+    private suspend fun handleMatchFound(matchId: String, mode: String, entryFee: Double) {
+        matchmakingTimerJob?.cancel()
+        _gameState.value = _gameState.value.copy(
+            isMatchmaking = false,
+            matchId = matchId
+        )
+        _matchFoundEvent.emit(matchId)
+    }
+
     fun cancelMatchmaking() {
+        matchmakingJob?.cancel()
+        matchmakingTimerJob?.cancel()
+        matchmakingElapsed.value = 0
         _gameState.value = GameState()
+        // Fire-and-forget cancel on backend
+        viewModelScope.launch {
+            try { matchmakingRepo.cancelMatchmaking() } catch (_: Exception) {}
+        }
     }
 
     fun startPracticeMode() {

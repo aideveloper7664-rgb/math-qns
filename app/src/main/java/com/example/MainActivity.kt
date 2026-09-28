@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.ArenaBottomNav
@@ -70,6 +71,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Real-time matchmaking: navigate to game when match found
+                val matchmakingElapsed by viewModel.matchmakingElapsed.collectAsState()
+                LaunchedEffect(Unit) {
+                    viewModel.matchFoundEvent.collect { matchId ->
+                        if (matchId.isNotBlank()) {
+                            // Navigate to game screen with real matchId
+                            currentRoute = "game"
+                        }
+                    }
+                }
+
                 // Global Payment Activity Listener
                 DisposableEffect(Unit) {
                     (application as? SpeedMathApp)?.paymentListener = { success, depositId, message ->
@@ -112,6 +124,9 @@ class MainActivity : ComponentActivity() {
                     MatchmakingScreen(
                         mode = gameState.mode,
                         entryFee = gameState.entryFee,
+                        elapsedSeconds = matchmakingElapsed,
+                        matchFound = !gameState.matchId.isNullOrBlank() && !gameState.isMatchmaking,
+                        matchId = gameState.matchId,
                         onCancel = {
                             viewModel.cancelMatchmaking()
                             currentRoute = "play"
@@ -119,6 +134,9 @@ class MainActivity : ComponentActivity() {
                         onPlayPractice = {
                             viewModel.cancelMatchmaking()
                             viewModel.startPracticeMode()
+                        },
+                        onMatchNavigate = { matchId ->
+                            currentRoute = "game"
                         }
                     )
                 } else if (gameState.active || gameState.isFinished) {
