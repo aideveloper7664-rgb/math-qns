@@ -38,6 +38,7 @@ import com.example.ui.theme.*
 @Composable
 fun ProfileScreen(
     user: UserEntity?,
+    withdrawals: List<com.example.data.model.TransactionEntity> = emptyList(),
     onUpdateProfile: (String, String?) -> Unit,
     onNavigate: (String) -> Unit
 ) {
@@ -364,6 +365,47 @@ fun ProfileScreen(
                 }
             }
 
+            // ── Latest Withdrawal Live Status ─────────────────────────────
+            val latestWithdrawal = withdrawals.filter { it.type.equals("withdrawal", ignoreCase = true) }.firstOrNull()
+            if (latestWithdrawal != null) {
+                val isApproved = latestWithdrawal.status.equals("APPROVED", ignoreCase = true) ||
+                        latestWithdrawal.status.equals("COMPLETED", ignoreCase = true) ||
+                        latestWithdrawal.status.equals("SUCCESS", ignoreCase = true)
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = if (isApproved) GreenSuccess.copy(alpha = 0.12f) else GoldAccent.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, if (isApproved) GreenSuccess.copy(alpha = 0.45f) else GoldAccent.copy(alpha = 0.45f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Latest Withdrawal", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                            StatusPill(status = if (isApproved) "APPROVED" else latestWithdrawal.status)
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = "₹${"%.2f".format(latestWithdrawal.amount)} payout to ${latestWithdrawal.gatewayOrAccount}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = if (isApproved) "Verification complete. Transferred to account." else "Verification in progress. Usually takes under 24 hours.",
+                            fontSize = 11.sp,
+                            color = TextMuted,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
+            }
+
             // ── Battle Statistics Grid ──────────────────────────────────────
             ArenaCard(modifier = Modifier.padding(bottom = 16.dp)) {
                 Text(
@@ -418,7 +460,7 @@ fun ProfileScreen(
                         Text("🎁", fontSize = 24.sp)
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Refer & Earn ₹50", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Refer & Earn", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                             Text("Code: ${user.referralCode} · Tap to invite", fontSize = 11.sp, color = CyanPrimary)
                         }
                     }

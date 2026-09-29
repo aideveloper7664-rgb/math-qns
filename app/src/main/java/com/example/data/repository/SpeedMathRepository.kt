@@ -635,15 +635,8 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         val user = dao.getUserById(userId) ?: return@withContext false
         if (user.walletBalance < amount) return@withContext false
 
-        val newBalance = user.walletBalance - amount
-        val newWithdrawn = user.totalWithdrawn + amount
-
-        val updated = user.copy(
-            walletBalance = newBalance,
-            totalWithdrawn = newWithdrawn
-        )
-        dao.updateUser(updated)
-
+        // DO NOT update users.wallet_balance directly on pending withdrawal request.
+        // Only insert the pending record into withdrawals table & transactions.
         try {
             val withdrawalDto = SupabaseWithdrawalDto(
                 userId = userId,
@@ -657,10 +650,6 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                 status = "PENDING"
             )
             SupabaseClient.restApi.postWithdrawal(withdrawalDto)
-            SupabaseClient.restApi.updateUser("eq.$userId", updates = mapOf(
-                "wallet_balance" to newBalance,
-                "total_withdrawn" to newWithdrawn
-            ))
         } catch (e: Exception) {
             e.printStackTrace()
         }

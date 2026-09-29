@@ -108,7 +108,7 @@ fun ReferralScreen(
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_TEXT,
-                                    "🎮 Play Math Baazi and win real prizes! Use my referral code: ${user.referralCode} to get ₹50 bonus credits! Download app: https://ais-dev-cfcha536thi2azarfnw6uq-840513166105.asia-southeast1.run.app"
+                                    "🎮 Play Math Baazi and win real prizes! Use my referral code: ${user.referralCode} to get bonus credits! Download app: https://ais-dev-cfcha536thi2azarfnw6uq-840513166105.asia-southeast1.run.app"
                                 )
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Referral Code"))
@@ -168,7 +168,7 @@ fun ReferralScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                     RuleBullet(num = "1", text = "Share your referral code with your friends or classmates.")
                     RuleBullet(num = "2", text = "Friend enters your code when signing up for Math Baazi.")
-                    RuleBullet(num = "3", text = "You get ₹50 bonus credits credited straight to your wallet!")
+                    RuleBullet(num = "3", text = "You get bonus credits credited straight to your wallet!")
                 }
             }
 
@@ -204,7 +204,7 @@ fun ReferralScreen(
                             color = TextPrimary
                         )
                         Text(
-                            text = "Share your code above to earn ₹50 per friend!",
+                            text = "Share your code above to invite your friends!",
                             fontSize = 12.sp,
                             color = TextMuted
                         )

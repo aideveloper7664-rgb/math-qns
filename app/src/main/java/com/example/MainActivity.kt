@@ -283,6 +283,7 @@ class MainActivity : ComponentActivity() {
 
                                     "profile" -> ProfileScreen(
                                         user = currentUser,
+                                        withdrawals = userWithdrawals,
                                         onUpdateProfile = { name, photo ->
                                             viewModel.updateProfile(name, photo)
                                         },

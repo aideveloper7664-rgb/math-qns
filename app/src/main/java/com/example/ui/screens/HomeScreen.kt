@@ -303,7 +303,7 @@ fun HomeScreen(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text("Refer & Earn", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text("Get ₹50 / friend", fontSize = 11.sp, color = GreenSuccess)
+                            Text("Invite friends", fontSize = 11.sp, color = GreenSuccess)
                         }
                     }
                 }

@@ -40,6 +40,11 @@ fun WithdrawScreen(
     var amountText by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
+    val balance = user.walletBalance
+    val amt = amountText.toDoubleOrNull() ?: 0.0
+    val isOverBalance = amt > balance && amt > 0
+    val isUnderMin = amt > 0 && amt < minW
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -59,7 +64,7 @@ fun WithdrawScreen(
             ) {
                 Text("Available Balance", fontSize = 13.sp, color = TextMuted)
                 Text(
-                    text = "₹${"%.2f".format(user.walletBalance)}",
+                    text = "₹${"%.2f".format(balance)}",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = GreenSuccess
@@ -85,21 +90,43 @@ fun WithdrawScreen(
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { input ->
-                    amountText = input.filter { it.isDigit() }
+                    amountText = input.filter { it.isDigit() || it == '.' }
                     errorMsg = null
                 },
                 label = { Text("Amount (min ₹50, max ₹25,000)", color = TextMuted) },
                 prefix = { Text("₹", fontWeight = FontWeight.Bold, color = CyanPrimary) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                isError = isOverBalance || isUnderMin,
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = CyanPrimary,
                     unfocusedBorderColor = BorderSubtle,
                     focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
+                    unfocusedTextColor = TextPrimary,
+                    errorBorderColor = RedError
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (isOverBalance) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "❌ Insufficient balance (max ₹${"%.2f".format(balance)})",
+                    color = RedError,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (isUnderMin) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "❌ Minimum withdrawal is ₹50",
+                    color = RedError,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -213,7 +240,6 @@ fun WithdrawScreen(
 
         Button(
             onClick = {
-                val amt = amountText.toDoubleOrNull() ?: 0.0
                 val accountRef = upiId.trim()
 
                 if (upiId.isBlank() || !upiId.contains("@")) {
@@ -224,20 +250,25 @@ fun WithdrawScreen(
                     errorMsg = "Minimum withdrawal amount is ₹50."
                 } else if (amt > maxW) {
                     errorMsg = "Maximum withdrawal amount is ₹25,000."
-                } else if (amt > user.walletBalance) {
-                    errorMsg = "Amount exceeds available balance (₹${"%.2f".format(user.walletBalance)})."
+                } else if (amt > balance) {
+                    errorMsg = "Amount exceeds available balance (₹${"%.2f".format(balance)})."
                 } else {
                     onWithdraw(amt, method, accountRef, accountHolder.trim())
                     onBack()
                 }
             },
+            enabled = amt >= minW && amt <= balance && upiId.isNotBlank() && upiId.contains("@") && accountHolder.isNotBlank(),
             shape = RoundedCornerShape(14.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = CyanPrimary,
+                disabledContainerColor = SurfaceDark,
+                disabledContentColor = TextMuted
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(54.dp)
         ) {
-            Text("SUBMIT WITHDRAWAL REQUEST", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = BgDark)
+            Text("SUBMIT WITHDRAWAL REQUEST", fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
         if (withdrawals.isNotEmpty()) {
