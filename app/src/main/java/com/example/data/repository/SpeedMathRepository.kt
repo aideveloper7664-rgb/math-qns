@@ -781,8 +781,10 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                 )
                 dao.insertTransaction(tx)
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            Log.e("Withdraw", "Exception syncing withdrawals", e)
+            Log.e("Withdraw", "Exception syncing withdrawals: ${e.message}")
         }
         return@withContext anyChanged
     }
