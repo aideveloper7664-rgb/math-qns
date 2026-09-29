@@ -328,26 +328,7 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                 userEntities.forEach { dao.insertUser(it) }
             }
 
-            // 3. Sync Questions
-            val questionsRes = SupabaseClient.restApi.getQuestions(limit = 100)
-            if (questionsRes.isSuccessful && questionsRes.body() != null) {
-                val qEntities = questionsRes.body()!!.map { dto ->
-                    QuestionEntity(
-                        id = dto.id,
-                        text = dto.text ?: dto.question ?: "Math Question",
-                        optionA = dto.optionA ?: "A",
-                        optionB = dto.optionB ?: "B",
-                        optionC = dto.optionC ?: "C",
-                        optionD = dto.optionD ?: "D",
-                        correctAnswer = dto.correctAnswer ?: "A",
-                        category = dto.category ?: "Arithmetic",
-                        difficulty = dto.difficulty ?: "Medium"
-                    )
-                }
-                dao.insertQuestions(qEntities)
-            }
-
-            // 4. Sync Tournaments
+            // 3. Sync Tournaments
             val tourRes = SupabaseClient.restApi.getTournaments()
             if (tourRes.isSuccessful && tourRes.body() != null) {
                 val tourEntities = tourRes.body()!!.map { dto ->
@@ -954,88 +935,5 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             mmr >= 1050 -> "Silver"
             else -> "Bronze"
         }
-    }
-
-    suspend fun getQuestionsForGame(count: Int): List<QuestionEntity> = withContext(Dispatchers.IO) {
-        val existing = dao.getAllQuestions()
-        val list = mutableListOf<QuestionEntity>()
-        list.addAll(existing.shuffled().take(count))
-
-        while (list.size < count) {
-            list.add(generateRandomMathQuestion())
-        }
-        return@withContext list.take(count)
-    }
-
-    private fun generateRandomMathQuestion(): QuestionEntity {
-        val opType = Random.nextInt(0, 5)
-        var qText = ""
-        var answer = 0
-
-        when (opType) {
-            0 -> {
-                val a = Random.nextInt(12, 180)
-                val b = Random.nextInt(12, 180)
-                qText = "What is $a + $b ?"
-                answer = a + b
-            }
-            1 -> {
-                val a = Random.nextInt(50, 300)
-                val b = Random.nextInt(12, a)
-                qText = "What is $a - $b ?"
-                answer = a - b
-            }
-            2 -> {
-                val a = Random.nextInt(6, 25)
-                val b = Random.nextInt(6, 25)
-                qText = "Calculate $a × $b"
-                answer = a * b
-            }
-            3 -> {
-                val b = Random.nextInt(3, 16)
-                val ans = Random.nextInt(5, 25)
-                val a = b * ans
-                qText = "What is $a ÷ $b ?"
-                answer = ans
-            }
-            else -> {
-                val a = Random.nextInt(11, 30)
-                qText = "What is $a² ?"
-                answer = a * a
-            }
-        }
-
-        val correctIndex = Random.nextInt(0, 4)
-        val correctLetter = listOf("A", "B", "C", "D")[correctIndex]
-        val options = mutableSetOf<Int>()
-        options.add(answer)
-
-        while (options.size < 4) {
-            val offset = Random.nextInt(-15, 16)
-            if (offset != 0 && answer + offset > 0) {
-                options.add(answer + offset)
-            }
-        }
-
-        val optList = options.shuffled().map { it.toString() }.toMutableList()
-        val correctStr = answer.toString()
-        val currPos = optList.indexOf(correctStr)
-        if (currPos != -1 && currPos != correctIndex) {
-            val temp = optList[correctIndex]
-            optList[correctIndex] = correctStr
-            optList[currPos] = temp
-        }
-
-        return QuestionEntity(
-            id = UUID.randomUUID().toString(),
-            text = qText,
-            optionA = optList.getOrElse(0) { (answer + 1).toString() },
-            optionB = optList.getOrElse(1) { (answer - 2).toString() },
-            optionC = optList.getOrElse(2) { (answer + 5).toString() },
-            optionD = optList.getOrElse(3) { (answer - 7).toString() },
-            correctAnswer = correctLetter,
-            category = "Speed Math",
-            difficulty = if (answer > 100) "Hard" else "Medium"
-        )
     }
 }

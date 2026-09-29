@@ -8,7 +8,9 @@ import com.example.data.model.*
 import com.example.data.remote.GameResult
 import com.example.data.remote.GameSessionDto
 import com.example.data.remote.QuestionData
+import com.example.data.remote.SupabaseClient
 import com.example.data.repository.DepositRepository
+import com.example.data.repository.RpcResult
 import com.example.data.repository.SinglePlayerGameRepository
 import com.example.data.repository.SpeedMathRepository
 import kotlinx.coroutines.Job
@@ -26,15 +28,18 @@ data class GameState(
     val score: Int = 0,
     val correctAnswers: Int = 0,
     val questionsAnswered: Int = 0,
-    val timeLeftMs: Long = 15000L,
-    val timeLimitMs: Long = 15000L,
+    val timeLeftMs: Long = 10000L,
+    val timeLimitMs: Long = 10000L,
     val isLocked: Boolean = false,
     val selectedOption: String? = null,
     val lastIsCorrect: Boolean? = null,
+    val lastCorrectAnswer: String? = null,
     val lastPointsEarned: Int = 0,
     val isGameOver: Boolean = false,
     val gameResult: GameResult? = null,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val errorRetryable: Boolean = true
 )
 
 sealed class ToastEvent {
@@ -173,6 +178,18 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    init {
+        viewModelScope.launch {
+            SupabaseClient.sessionExpired.collect { expired ->
+                if (expired) {
+                    timerJob?.cancel()
+                    _gameState.value = GameState()
+                    _toastEvent.emit(ToastEvent.Show("Session expired, please login again.", true))
+                }
+            }
+        }
+    }
+
     // ─── SINGLE-PLAYER PROGRESSIVE GAME ACTIONS ───────────────────────────────
 
     fun startGame() {
@@ -191,62 +208,89 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
-        _gameState.value = GameState(isLoading = true)
+        _gameState.value = GameState(isLoading = true, active = true)
 
         viewModelScope.launch {
-            val startResp = singlePlayerRepo.startGame()
-            if (!startResp.success || startResp.sessionId.isNullOrBlank()) {
-                val err = startResp.error ?: "Failed to start game"
-                _gameState.value = GameState()
-                _toastEvent.emit(ToastEvent.Show(err, true))
-                return@launch
+            when (val res = singlePlayerRepo.startGame()) {
+                is RpcResult.Ok -> {
+                    val startResp = res.value
+                    val sessionId = startResp.sessionId ?: ""
+                    val entryFee = startResp.entryFee
+
+                    if (startResp.newBalance != null) {
+                        repository.updateLocalBalance(user.id, startResp.newBalance)
+                    }
+
+                    _gameState.value = GameState(
+                        active = true,
+                        sessionId = sessionId,
+                        entryFee = entryFee,
+                        questionNumber = 1,
+                        score = 0,
+                        correctAnswers = 0,
+                        questionsAnswered = 0,
+                        isLoading = true
+                    )
+
+                    loadQuestion(sessionId)
+                }
+                is RpcResult.Err -> {
+                    _gameState.value = GameState()
+                    _toastEvent.emit(ToastEvent.Show(res.message, true))
+                }
             }
-
-            val sessionId = startResp.sessionId
-            val entryFee = startResp.entryFee
-
-            // Deduct balance locally from StateFlow until refreshed
-            if (startResp.newBalance != null) {
-                repository.updateLocalBalance(user.id, startResp.newBalance)
-            } else {
-                repository.updateLocalBalance(user.id, (user.walletBalance - entryFee).coerceAtLeast(0.0))
-            }
-
-            _gameState.value = GameState(
-                active = true,
-                sessionId = sessionId,
-                entryFee = entryFee,
-                questionNumber = 1,
-                score = 0,
-                correctAnswers = 0,
-                questionsAnswered = 0,
-                isLoading = true
-            )
-
-            loadQuestion(sessionId, 1, 0, 0)
         }
     }
 
-    private fun loadQuestion(sessionId: String, qNumber: Int, currentScore: Int, correctCount: Int) {
+    fun retryLoadQuestion() {
+        val state = _gameState.value
+        val sid = state.sessionId ?: return
+        _gameState.value = state.copy(isLoading = true, errorMessage = null)
+        loadQuestion(sid)
+    }
+
+    private fun loadQuestion(sessionId: String) {
         viewModelScope.launch {
-            val q = singlePlayerRepo.getNextQuestion(sessionId, qNumber)
-            _gameState.value = _gameState.value.copy(
-                active = true,
-                isLoading = false,
-                currentQuestion = q,
-                questionNumber = qNumber,
-                score = currentScore,
-                correctAnswers = correctCount,
-                timeLeftMs = q.timeLimitMs,
-                timeLimitMs = q.timeLimitMs,
-                isLocked = false,
-                selectedOption = null,
-                lastIsCorrect = null,
-                lastPointsEarned = 0,
-                isGameOver = false,
-                gameResult = null
-            )
-            startCountdownTimer()
+            val currentState = _gameState.value
+            _gameState.value = currentState.copy(isLoading = true, errorMessage = null)
+
+            when (val res = singlePlayerRepo.getNextQuestion(sessionId)) {
+                is RpcResult.Ok -> {
+                    val q = res.value
+                    _gameState.value = _gameState.value.copy(
+                        active = true,
+                        isLoading = false,
+                        errorMessage = null,
+                        currentQuestion = q,
+                        questionNumber = q.questionNumber,
+                        score = currentState.score,
+                        correctAnswers = currentState.correctAnswers,
+                        timeLeftMs = q.timeLimitMs,
+                        timeLimitMs = q.timeLimitMs,
+                        isLocked = false,
+                        selectedOption = null,
+                        lastIsCorrect = null,
+                        lastCorrectAnswer = null,
+                        lastPointsEarned = 0,
+                        isGameOver = false,
+                        gameResult = null
+                    )
+                    startCountdownTimer()
+                }
+                is RpcResult.Err -> {
+                    timerJob?.cancel()
+                    if (res.retryable) {
+                        _gameState.value = _gameState.value.copy(
+                            isLoading = false,
+                            errorMessage = res.message,
+                            errorRetryable = true
+                        )
+                    } else {
+                        _toastEvent.emit(ToastEvent.Show(res.message, true))
+                        quitGame()
+                    }
+                }
+            }
         }
     }
 
@@ -269,6 +313,13 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun retrySubmitAnswer() {
+        val state = _gameState.value
+        val q = state.currentQuestion ?: return
+        val sid = state.sessionId ?: return
+        submitAnswerInternal(sid, q, state.selectedOption)
+    }
+
     fun submitAnswer(answer: String?) {
         val state = _gameState.value
         if (state.isLocked || !state.active || state.isGameOver) return
@@ -276,72 +327,85 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         timerJob?.cancel()
         val question = state.currentQuestion ?: return
         val sessionId = state.sessionId ?: return
-        val responseTimeMs = (state.timeLimitMs - state.timeLeftMs).coerceAtLeast(0L)
 
-        // Lock UI immediately
         _gameState.value = state.copy(
             isLocked = true,
             selectedOption = answer
         )
 
+        submitAnswerInternal(sessionId, question, answer)
+    }
+
+    private fun submitAnswerInternal(sessionId: String, question: QuestionData, answer: String?) {
+        val state = _gameState.value
+        val responseTimeMs = (state.timeLimitMs - state.timeLeftMs).coerceAtLeast(0L)
+
         viewModelScope.launch {
-            val submitResp = singlePlayerRepo.submitAnswer(
-                sessionId = sessionId,
-                question = question,
-                answer = answer,
-                responseTimeMs = responseTimeMs,
-                currentScore = state.score,
-                correctCount = state.correctAnswers
-            )
+            _gameState.value = _gameState.value.copy(isLoading = true, errorMessage = null)
+            when (val res = singlePlayerRepo.submitAnswer(sessionId, question.questionId, answer, responseTimeMs)) {
+                is RpcResult.Ok -> {
+                    val submitResp = res.value
+                    val isCorrect = submitResp.correct
+                    val gameOver = submitResp.gameOver
 
-            if (submitResp.correct) {
-                // Correct answer! Show green feedback, add score, load next question
-                val newScore = submitResp.totalScore
-                val newCorrect = state.correctAnswers + 1
-                val newAnswered = state.questionsAnswered + 1
+                    val newScore = submitResp.totalScore
+                    val newCorrect = if (isCorrect) state.correctAnswers + 1 else state.correctAnswers
+                    val newAnswered = state.questionsAnswered + 1
 
-                _gameState.value = state.copy(
-                    isLocked = true,
-                    selectedOption = answer,
-                    lastIsCorrect = true,
-                    lastPointsEarned = submitResp.pointsEarned,
-                    score = newScore,
-                    correctAnswers = newCorrect,
-                    questionsAnswered = newAnswered
-                )
+                    if (!gameOver) {
+                        _gameState.value = _gameState.value.copy(
+                            isLoading = false,
+                            isLocked = true,
+                            selectedOption = answer,
+                            lastIsCorrect = isCorrect,
+                            lastCorrectAnswer = submitResp.correctAnswer ?: question.correctAnswer,
+                            lastPointsEarned = submitResp.pointsEarned,
+                            score = newScore,
+                            correctAnswers = newCorrect,
+                            questionsAnswered = newAnswered
+                        )
 
-                delay(800)
-                loadQuestion(sessionId, state.questionNumber + 1, newScore, newCorrect)
-            } else {
-                // Wrong answer or timeout -> Game Over!
-                val newAnswered = state.questionsAnswered + 1
-                _gameState.value = state.copy(
-                    isLocked = true,
-                    selectedOption = answer,
-                    lastIsCorrect = false,
-                    lastPointsEarned = 0,
-                    questionsAnswered = newAnswered
-                )
+                        delay(600)
+                        loadQuestion(sessionId)
+                    } else {
+                        _gameState.value = _gameState.value.copy(
+                            isLoading = false,
+                            isLocked = true,
+                            selectedOption = answer,
+                            lastIsCorrect = false,
+                            lastCorrectAnswer = submitResp.correctAnswer ?: question.correctAnswer,
+                            lastPointsEarned = 0,
+                            questionsAnswered = newAnswered
+                        )
 
-                delay(1000)
+                        delay(800)
 
-                val result = GameResult(
-                    totalScore = submitResp.totalScore,
-                    correctAnswers = state.correctAnswers,
-                    questionsAnswered = newAnswered,
-                    prize = submitResp.prize,
-                    reason = submitResp.reason ?: if (answer == null) "Time Out" else "Wrong Answer"
-                )
+                        val result = GameResult(
+                            totalScore = submitResp.totalScore,
+                            correctAnswers = newCorrect,
+                            questionsAnswered = newAnswered,
+                            prize = submitResp.prize,
+                            reason = submitResp.reason ?: if (answer == null) "Time Out" else "Wrong Answer"
+                        )
 
-                _gameState.value = state.copy(
-                    active = false,
-                    isGameOver = true,
-                    gameResult = result
-                )
+                        _gameState.value = _gameState.value.copy(
+                            active = false,
+                            isGameOver = true,
+                            gameResult = result,
+                            score = submitResp.totalScore
+                        )
 
-                // Refresh user wallet & session list
-                currentUserId.value?.let { uid ->
-                    refreshUserData(uid)
+                        currentUserId.value?.let { uid ->
+                            refreshUserData(uid)
+                        }
+                    }
+                }
+                is RpcResult.Err -> {
+                    _gameState.value = _gameState.value.copy(
+                        isLoading = false,
+                        errorMessage = res.message,
+                        errorRetryable = true
+                    )
                 }
             }
         }

@@ -2,10 +2,19 @@ package com.example.data.remote
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
+import com.example.BuildConfig
+import com.example.data.local.SessionManager
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
+import okhttp3.Authenticator
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import okhttp3.Route
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -23,9 +32,10 @@ object SupabaseClient {
 
     private var prefs: SharedPreferences? = null
 
+    val sessionExpired = MutableStateFlow(false)
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        // Restore persisted session on startup
         authToken = prefs?.getString(KEY_TOKEN, null)
         currentUserId = prefs?.getString(KEY_USER_ID, null)
         currentUserEmail = prefs?.getString(KEY_USER_EMAIL, null)
@@ -76,12 +86,75 @@ object SupabaseClient {
         chain.proceed(builder.build())
     }
 
+    private val tokenLock = Any()
+
+    private val tokenAuthenticator = Authenticator { _: Route?, response: Response ->
+        // Give up if request was already retried or if this is the token refresh call itself
+        if (response.request.header("X-Retry") != null || response.request.url.encodedPath.contains("auth/v1/token")) {
+            return@Authenticator null
+        }
+
+        synchronized(tokenLock) {
+            val currentRefresh = SessionManager.refreshToken
+            if (currentRefresh.isNullOrBlank()) {
+                sessionExpired.value = true
+                SessionManager.clearSession()
+                clearSession()
+                return@Authenticator null
+            }
+
+            try {
+                val refreshClient = OkHttpClient.Builder().build()
+                val refreshRetrofit = Retrofit.Builder()
+                    .baseUrl(BASE_URL)
+                    .client(refreshClient)
+                    .addConverterFactory(MoshiConverterFactory.create(moshi))
+                    .build()
+                val authService = refreshRetrofit.create(SupabaseAuthApi::class.java)
+
+                val reqBody = mapOf("refresh_token" to currentRefresh)
+                val callRes = runBlocking { authService.refresh(reqBody) }
+
+                if (callRes.isSuccessful && callRes.body() != null) {
+                    val authResp = callRes.body()!!
+                    val newAccess = authResp.accessToken
+                    val newRefresh = authResp.refreshToken ?: currentRefresh
+
+                    if (!newAccess.isNullOrBlank()) {
+                        SessionManager.updateTokens(newAccess, newRefresh)
+                        authToken = newAccess
+
+                        return@Authenticator response.request.newBuilder()
+                            .header("Authorization", "Bearer $newAccess")
+                            .header("X-Retry", "1")
+                            .build()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("AUTH_REFRESH", "Exception during token refresh", e)
+            }
+
+            // Refresh failed
+            sessionExpired.value = true
+            SessionManager.clearSession()
+            clearSession()
+            return@Authenticator null
+        }
+    }
+
+    private val loggingInterceptor: HttpLoggingInterceptor by lazy {
+        HttpLoggingInterceptor().apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC else HttpLoggingInterceptor.Level.NONE
+            redactHeader("Authorization")
+            redactHeader("apikey")
+        }
+    }
+
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(headerInterceptor)
-            .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.BODY
-            })
+            .addInterceptor(loggingInterceptor)
+            .authenticator(tokenAuthenticator)
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .build()
@@ -109,4 +182,3 @@ object SupabaseClient {
         retrofit.create(SupabaseRestApi::class.java)
     }
 }
-

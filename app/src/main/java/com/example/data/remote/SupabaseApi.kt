@@ -18,6 +18,11 @@ interface SupabaseAuthApi {
     suspend fun resetPassword(
         @Body body: Map<String, String>
     ): Response<Unit>
+
+    @POST("auth/v1/token?grant_type=refresh_token")
+    suspend fun refresh(
+        @Body body: Map<String, String>
+    ): Response<SupabaseAuthResponse>
 }
 
 interface SupabaseRestApi {

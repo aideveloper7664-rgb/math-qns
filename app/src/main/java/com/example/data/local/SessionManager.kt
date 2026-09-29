@@ -81,4 +81,17 @@ object SessionManager {
 
     val authToken: String?
         get() = prefs?.getString(KEY_AUTH_TOKEN, null)
+
+    val refreshToken: String?
+        get() = prefs?.getString(KEY_REFRESH_TOKEN, null)
+
+    fun updateTokens(accessToken: String, refreshToken: String) {
+        val editor = prefs?.edit() ?: return
+        editor.putString(KEY_AUTH_TOKEN, accessToken)
+        editor.putString(KEY_REFRESH_TOKEN, refreshToken)
+        editor.apply()
+
+        SupabaseClient.authToken = accessToken
+        Log.d(TAG, "✅ Tokens refreshed & updated in SessionManager")
+    }
 }
