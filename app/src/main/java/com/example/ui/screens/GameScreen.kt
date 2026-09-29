@@ -29,7 +29,9 @@ fun GameScreen(
     state: GameState,
     onAnswer: (String?) -> Unit,
     onPlayAgain: () -> Unit,
-    onGoHome: () -> Unit
+    onGoHome: () -> Unit,
+    onRetry: () -> Unit = {},
+    onQuit: () -> Unit = {}
 ) {
     if (state.isGameOver && state.gameResult != null) {
         GameOverView(
@@ -37,6 +39,27 @@ fun GameScreen(
             onPlayAgain = onPlayAgain,
             onHome = onGoHome
         )
+        return
+    }
+
+    if (state.errorMessage != null && !state.isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize().background(BgDark).padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Something went wrong", color = RedError, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(12.dp))
+                Text(state.errorMessage, color = TextPrimary, fontSize = 14.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(24.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (state.errorRetryable) {
+                        Button(onClick = onRetry) { Text("Retry") }
+                    }
+                    OutlinedButton(onClick = onQuit) { Text("Quit") }
+                }
+            }
+        }
         return
     }
 

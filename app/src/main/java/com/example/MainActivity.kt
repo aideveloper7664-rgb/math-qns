@@ -149,6 +149,14 @@ class MainActivity : ComponentActivity() {
                         onGoHome = {
                             viewModel.quitGame()
                             currentRoute = "home"
+                        },
+                        onRetry = {
+                            if (gameState.currentQuestion == null) viewModel.retryLoadQuestion()
+                            else viewModel.retrySubmitAnswer()
+                        },
+                        onQuit = {
+                            viewModel.quitGame()
+                            currentRoute = "home"
                         }
                     )
                 } else {

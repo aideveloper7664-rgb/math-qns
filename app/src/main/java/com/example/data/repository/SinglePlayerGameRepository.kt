@@ -104,7 +104,7 @@ class SinglePlayerGameRepository {
                 } else {
                     val errBody = response.errorBody()?.string() ?: "HTTP ${response.code()}"
                     Log.e(tag, "rpc=get_next_question code=${response.code()} body=$errBody")
-                    lastErr = RpcResult.Err("Server error (${response.code()})", response.code(), retryable = true)
+                    lastErr = RpcResult.Err("Server error (${response.code()}): $errBody", response.code(), retryable = true)
                 }
             } catch (e: Exception) {
                 Log.e(tag, "rpc=get_next_question exception attempt=${retries + 1}: ${e.message}")
@@ -161,7 +161,7 @@ class SinglePlayerGameRepository {
                 } else {
                     val errBody = response.errorBody()?.string() ?: "HTTP ${response.code()}"
                     Log.e(tag, "rpc=submit_answer code=${response.code()} body=$errBody")
-                    lastErr = RpcResult.Err("Server error submitting answer (${response.code()})", response.code(), retryable = true)
+                    lastErr = RpcResult.Err("Server error submitting answer (${response.code()}): $errBody", response.code(), retryable = true)
                 }
             } catch (e: Exception) {
                 Log.e(tag, "rpc=submit_answer exception attempt=${retries + 1}: ${e.message}")
