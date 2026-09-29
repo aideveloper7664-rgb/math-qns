@@ -183,8 +183,7 @@ class MainActivity : ComponentActivity() {
                                         user = currentUser,
                                         transactions = userTransactions,
                                         onNavigate = { target -> currentRoute = target },
-                                        onRefreshWithdrawals = { viewModel.syncWithdrawals() },
-                                        onApproveWithdrawal = { viewModel.approveWithdrawal() }
+                                        onRefreshWithdrawals = { viewModel.syncWithdrawals() }
                                     )
 
                                     "deposit", "add_money" -> AddMoneyScreen(
@@ -231,7 +230,6 @@ class MainActivity : ComponentActivity() {
                                             viewModel.withdraw(amt, method, acc, holder)
                                         },
                                         onRefreshWithdrawals = { viewModel.syncWithdrawals() },
-                                        onApproveWithdrawal = { viewModel.approveWithdrawal() },
                                         onBack = { currentRoute = "wallet" }
                                     )
 

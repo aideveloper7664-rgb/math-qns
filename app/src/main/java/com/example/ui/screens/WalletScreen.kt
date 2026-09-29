@@ -34,8 +34,7 @@ fun WalletScreen(
     user: UserEntity?,
     transactions: List<TransactionEntity>,
     onNavigate: (String) -> Unit,
-    onRefreshWithdrawals: () -> Unit = {},
-    onApproveWithdrawal: () -> Unit = {}
+    onRefreshWithdrawals: () -> Unit = {}
 ) {
     if (user == null) return
 
@@ -206,17 +205,6 @@ fun WalletScreen(
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                                 Spacer(Modifier.width(6.dp))
                                 Text("Check Status", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
-
-                            if (!isApproved) {
-                                Button(
-                                    onClick = onApproveWithdrawal,
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = GreenSuccess),
-                                    modifier = Modifier.weight(1f).height(36.dp)
-                                ) {
-                                    Text("Simulate Approve", fontSize = 11.sp, fontWeight = FontWeight.Black, color = BgDark)
-                                }
                             }
                         }
                     }

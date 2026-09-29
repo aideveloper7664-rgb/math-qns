@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "SpeedMath Arena"
+rootProject.name = "Math Baazi"
 
 include(":app")

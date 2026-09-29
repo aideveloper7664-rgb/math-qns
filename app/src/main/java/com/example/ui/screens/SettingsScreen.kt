@@ -118,7 +118,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Play responsibly. SpeedMath Arena encourages mental math training and fair competitive gaming.",
+                    "Play responsibly. Math Baazi encourages mental math training and fair competitive gaming.",
                     fontSize = 11.sp,
                     color = TextMuted,
                     lineHeight = 16.sp

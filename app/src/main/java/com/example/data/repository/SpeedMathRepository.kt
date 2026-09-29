@@ -712,33 +712,6 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         }
     }
 
-    suspend fun approveWithdrawal(userId: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            dao.updateAllWithdrawalStatus(userId, "APPROVED")
-            try {
-                val res = SupabaseClient.restApi.getWithdrawals("eq.$userId")
-                if (res.isSuccessful && res.body() != null) {
-                    res.body()!!.firstOrNull()?.id?.let { wId ->
-                        SupabaseClient.restApi.updateWithdrawal("eq.$wId", mapOf("status" to "APPROVED"))
-                    }
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            val notif = NotificationEntity(
-                id = UUID.randomUUID().toString(),
-                title = "Withdrawal Approved! 🎉",
-                message = "Your withdrawal has been APPROVED and successfully credited to your account.",
-                category = "Wallet"
-            )
-            dao.insertNotification(notif)
-            return@withContext true
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext false
-        }
-    }
-
     fun getUserWithdrawalsFlow(userId: String) = dao.getUserWithdrawalsFlow(userId)
 
     suspend fun getUserReferrals(userId: String): List<SupabaseReferralDto> = withContext(Dispatchers.IO) {

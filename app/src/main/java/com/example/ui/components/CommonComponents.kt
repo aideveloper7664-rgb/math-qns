@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,6 +18,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import com.example.R
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -316,18 +319,14 @@ fun ArenaTopBar(
         ),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Brush.linearGradient(listOf(CyanPrimary, BlueSecondary))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = "∑", color = BgDark, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.ic_logo),
+                    contentDescription = "Math Baazi",
+                    modifier = Modifier.size(38.dp)
+                )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "SpeedMath",
+                    text = "Math Baazi",
                     fontWeight = FontWeight.ExtraBold,
                     fontSize = 16.sp,
                     color = TextPrimary

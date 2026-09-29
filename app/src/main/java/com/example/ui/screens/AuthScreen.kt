@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,6 +13,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -58,32 +61,23 @@ fun AuthScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 // Logo Icon
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Brush.linearGradient(listOf(CyanPrimary, BlueSecondary))),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "∑",
-                        color = BgDark,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 32.sp
-                    )
-                }
+                Image(
+                    painter = painterResource(id = R.drawable.ic_logo),
+                    contentDescription = "Math Baazi",
+                    modifier = Modifier.size(96.dp)
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "SpeedMath Arena",
+                    text = "Math Baazi",
                     fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary
                 )
 
                 Text(
-                    text = "Real-time multiplayer mathematics.\nCompete. Climb. Conquer.",
+                    text = "Play. Solve. Earn.",
                     fontSize = 12.sp,
                     color = TextMuted,
                     textAlign = TextAlign.Center,

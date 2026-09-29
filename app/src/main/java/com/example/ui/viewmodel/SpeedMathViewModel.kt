@@ -382,17 +382,6 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun approveWithdrawal() {
-        val userId = currentUserId.value ?: return
-        viewModelScope.launch {
-            val ok = repository.approveWithdrawal(userId)
-            if (ok) {
-                _toastEvent.emit(ToastEvent.Show("Withdrawal APPROVED! 🎉"))
-                refreshUserData(userId)
-            }
-        }
-    }
-
     fun withdraw(amount: Double, method: String, account: String, accountHolder: String = "") {
         val userId = currentUserId.value ?: return
         viewModelScope.launch {

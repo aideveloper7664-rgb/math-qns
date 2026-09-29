@@ -56,7 +56,7 @@ fun LeaderboardScreen(
             .background(BgDark)
             .padding(horizontal = 16.dp)
     ) {
-        PageHeader(title = "Leaderboard", subtitle = "Top ranked solvers in SpeedMath Arena")
+        PageHeader(title = "Leaderboard", subtitle = "Top ranked solvers in Math Baazi")
 
         // ── Tab Selector ────────────────────────────────────────────────────
         Surface(

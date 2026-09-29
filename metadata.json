@@ -1,5 +1,5 @@
 {
-  "name": "SpeedMath Arena",
+  "name": "Math Baazi",
   "description": "Real-time competitive speed mathematics app with 1v1, squad, tournament, local persistence, ranking, and wallet features.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

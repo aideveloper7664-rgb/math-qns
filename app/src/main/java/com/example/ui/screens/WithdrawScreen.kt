@@ -27,7 +27,6 @@ fun WithdrawScreen(
     withdrawals: List<com.example.data.model.TransactionEntity> = emptyList(),
     onWithdraw: (Double, String, String, String) -> Unit,
     onRefreshWithdrawals: () -> Unit = {},
-    onApproveWithdrawal: () -> Unit = {},
     onBack: () -> Unit
 ) {
     if (user == null) return
@@ -35,10 +34,8 @@ fun WithdrawScreen(
     val minW = 50.0
     val maxW = 25000.0
 
-    var method by remember { mutableStateOf("UPI") } // "UPI" or "Bank"
+    val method = "UPI"
     var upiId by remember { mutableStateOf("") }
-    var bankAccount by remember { mutableStateOf("") }
-    var ifscCode by remember { mutableStateOf("") }
     var accountHolder by remember { mutableStateOf(user.displayName) }
     var amountText by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
@@ -51,7 +48,7 @@ fun WithdrawScreen(
             .verticalScroll(rememberScrollState())
             .imePadding()
     ) {
-        PageHeader(title = "Withdraw Money", subtitle = "Transfer winnings directly to UPI / Bank", onBack = onBack)
+        PageHeader(title = "Withdraw Money", subtitle = "Transfer winnings directly to your UPI ID", onBack = onBack)
 
         // ── Available Balance Card ──────────────────────────────────────────
         ArenaCard(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
@@ -80,37 +77,7 @@ fun WithdrawScreen(
 
         // ── Withdrawal Method Selector ──────────────────────────────────────
         ArenaCard(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
-            Text("Select Payout Method", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                listOf("UPI", "Bank").forEach { m ->
-                    val isSelected = method == m
-                    Surface(
-                        color = if (isSelected) CyanPrimary else SurfaceDark,
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, if (isSelected) CyanPrimary else BorderSubtle),
-                        modifier = Modifier
-                            .weight(1f)
-                            .clickable {
-                                method = m
-                                errorMsg = null
-                            }
-                    ) {
-                        Box(
-                            modifier = Modifier.padding(vertical = 12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (m == "UPI") "⚡ UPI Transfer" else "🏦 Bank Account",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isSelected) BgDark else TextPrimary
-                            )
-                        }
-                    }
-                }
-            }
+            Text("Payout Method: ⚡ UPI Transfer", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -165,8 +132,7 @@ fun WithdrawScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            if (method == "UPI") {
-                // UPI ID input
+                            // UPI ID input
                 OutlinedTextField(
                     value = upiId,
                     onValueChange = {
@@ -185,45 +151,6 @@ fun WithdrawScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
-            } else {
-                // Bank inputs
-                OutlinedTextField(
-                    value = bankAccount,
-                    onValueChange = {
-                        bankAccount = it.trim()
-                        errorMsg = null
-                    },
-                    label = { Text("Bank Account Number", color = TextMuted) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = BorderSubtle,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                OutlinedTextField(
-                    value = ifscCode,
-                    onValueChange = {
-                        ifscCode = it.trim().uppercase()
-                        errorMsg = null
-                    },
-                    label = { Text("IFSC Code", color = TextMuted) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = BorderSubtle,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -276,7 +203,7 @@ fun WithdrawScreen(
                 Text("ℹ️", fontSize = 16.sp)
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Withdrawal will be processed within 24 hours. UPI ID will be verified before release.",
+                    text = "Withdrawal will be processed within 24 hours. Make sure your UPI ID is correct.",
                     fontSize = 11.sp,
                     color = TextMuted,
                     lineHeight = 15.sp
@@ -287,12 +214,10 @@ fun WithdrawScreen(
         Button(
             onClick = {
                 val amt = amountText.toDoubleOrNull() ?: 0.0
-                val accountRef = if (method == "UPI") upiId.trim() else "${bankAccount.trim()} / ${ifscCode.trim()}"
+                val accountRef = upiId.trim()
 
-                if (method == "UPI" && (upiId.isBlank() || !upiId.contains("@"))) {
+                if (upiId.isBlank() || !upiId.contains("@")) {
                     errorMsg = "Please enter a valid UPI ID (e.g. user@paytm)."
-                } else if (method == "Bank" && (bankAccount.isBlank() || ifscCode.isBlank())) {
-                    errorMsg = "Please enter both Account Number and IFSC Code."
                 } else if (accountHolder.isBlank()) {
                     errorMsg = "Please enter the Account Holder Name."
                 } else if (amt < minW) {
@@ -372,18 +297,6 @@ fun WithdrawScreen(
                             fontSize = 12.sp,
                             color = TextMuted
                         )
-
-                        if (!isApproved) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = onApproveWithdrawal,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = GreenSuccess),
-                                modifier = Modifier.fillMaxWidth().height(32.dp)
-                            ) {
-                                Text("Simulate Approve (Demo)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = BgDark)
-                            }
-                        }
                     }
                 }
             }

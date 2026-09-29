@@ -108,7 +108,7 @@ fun ReferralScreen(
                                 type = "text/plain"
                                 putExtra(
                                     Intent.EXTRA_TEXT,
-                                    "🎮 Play SpeedMath Arena and win real prizes! Use my referral code: ${user.referralCode} to get ₹50 bonus credits! Download app: https://ais-dev-cfcha536thi2azarfnw6uq-840513166105.asia-southeast1.run.app"
+                                    "🎮 Play Math Baazi and win real prizes! Use my referral code: ${user.referralCode} to get ₹50 bonus credits! Download app: https://ais-dev-cfcha536thi2azarfnw6uq-840513166105.asia-southeast1.run.app"
                                 )
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Share Referral Code"))
@@ -167,7 +167,7 @@ fun ReferralScreen(
                     Text("💡 How Referral Works", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                     Spacer(modifier = Modifier.height(10.dp))
                     RuleBullet(num = "1", text = "Share your referral code with your friends or classmates.")
-                    RuleBullet(num = "2", text = "Friend enters your code when signing up for SpeedMath.")
+                    RuleBullet(num = "2", text = "Friend enters your code when signing up for Math Baazi.")
                     RuleBullet(num = "3", text = "You get ₹50 bonus credits credited straight to your wallet!")
                 }
             }
