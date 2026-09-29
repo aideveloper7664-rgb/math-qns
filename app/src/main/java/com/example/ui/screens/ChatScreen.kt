@@ -134,13 +134,17 @@ fun ChatScreen(
                             Column(modifier = Modifier.padding(10.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = msg.userName + if (isMine) " (you)" else "",
+                                    com.example.ui.components.UserNameWithBadges(
+                                        displayName = msg.userName + if (isMine) " (you)" else "",
+                                        isVerified = if (isMine) (user?.isVerified ?: false) else msg.isVerified,
+                                        hasGoldCrown = if (isMine) (user?.hasGoldCrown ?: false) else msg.hasGoldCrown,
+                                        vipTier = if (isMine) (user?.vipTier ?: "none") else msg.vipTier,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isMine) CyanPrimary else TextPrimary
+                                        textColor = if (isMine) CyanPrimary else TextPrimary
                                     )
                                     Text(timeStr, fontSize = 10.sp, color = TextMuted)
                                 }

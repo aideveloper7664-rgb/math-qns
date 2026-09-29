@@ -14,6 +14,7 @@ data class SupabaseAuthRequest(
 data class SupabaseAuthResponse(
     @Json(name = "access_token") val accessToken: String?,
     @Json(name = "token_type") val tokenType: String?,
+    @Json(name = "refresh_token") val refreshToken: String? = null,
     @Json(name = "user") val user: SupabaseUserObject?
 )
 
@@ -131,10 +132,28 @@ data class SupabaseDepositDto(
 data class SupabaseWithdrawalDto(
     @Json(name = "id") val id: String? = null,
     @Json(name = "user_id") val userId: String,
+    @Json(name = "user_name") val userName: String? = null,
+    @Json(name = "user_email") val userEmail: String? = null,
     @Json(name = "amount") val amount: Double,
     @Json(name = "method") val method: String? = "UPI",
+    @Json(name = "upi_id") val upiId: String? = null,
+    @Json(name = "account_holder_name") val accountHolderName: String? = null,
+    @Json(name = "reference") val reference: String? = null,
     @Json(name = "status") val status: String? = "PENDING"
 )
+
+@JsonClass(generateAdapter = true)
+data class SupabaseReferralDto(
+    @Json(name = "id") val id: String? = null,
+    @Json(name = "referrer_id") val referrerId: String,
+    @Json(name = "referred_id") val referredId: String? = null,
+    @Json(name = "referral_code") val referralCode: String,
+    @Json(name = "reward_amount") val rewardAmount: Double = 0.0,
+    @Json(name = "reward_paid") val rewardPaid: Boolean = false,
+    @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "referred_name") val referredName: String? = null
+)
+
 
 @JsonClass(generateAdapter = true)
 data class SupabaseNotificationDto(
@@ -243,35 +262,63 @@ data class ZapUpiStatusResponse(
     @Json(name = "amount") val amount: String? = null
 )
 
-// ─── Matchmaking Models ───────────────────────────────────────────────────────
+// ─── Single-Player Progressive Game Models ──────────────────────────────────────
 
 @JsonClass(generateAdapter = true)
-data class JoinMatchmakingRequest(
-    @Json(name = "game_mode") val gameMode: String,
-    @Json(name = "entry_fee") val entryFee: Double
+data class QuestionData(
+    @Json(name = "question_id") val questionId: String,
+    @Json(name = "question_number") val questionNumber: Int,
+    @Json(name = "question_text") val questionText: String,
+    @Json(name = "option_a") val optionA: String,
+    @Json(name = "option_b") val optionB: String,
+    @Json(name = "option_c") val optionC: String,
+    @Json(name = "option_d") val optionD: String,
+    @Json(name = "difficulty") val difficulty: String = "easy",
+    @Json(name = "time_limit_ms") val timeLimitMs: Long = 15000L,
+    @Json(name = "correct_answer") val correctAnswer: String? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class JoinMatchmakingResponse(
+data class StartGameResponse(
     @Json(name = "success") val success: Boolean = false,
-    @Json(name = "matched") val matched: Boolean = false,
-    @Json(name = "match_id") val matchId: String? = null,
-    @Json(name = "queue_id") val queueId: String? = null,
-    @Json(name = "message") val message: String? = null,
+    @Json(name = "session_id") val sessionId: String? = null,
+    @Json(name = "entry_fee") val entryFee: Double = 10.0,
+    @Json(name = "new_balance") val newBalance: Double? = null,
     @Json(name = "error") val error: String? = null
 )
 
 @JsonClass(generateAdapter = true)
-data class CancelMatchmakingResponse(
-    @Json(name = "success") val success: Boolean = false,
-    @Json(name = "refunded") val refunded: Boolean = false,
-    @Json(name = "error") val error: String? = null
+data class SubmitAnswerResponse(
+    @Json(name = "correct") val correct: Boolean = false,
+    @Json(name = "correct_answer") val correctAnswer: String? = null,
+    @Json(name = "points_earned") val pointsEarned: Int = 0,
+    @Json(name = "total_score") val totalScore: Int = 0,
+    @Json(name = "game_over") val gameOver: Boolean = false,
+    @Json(name = "reason") val reason: String? = null,
+    @Json(name = "prize") val prize: Double = 0.0
+)
+
+data class GameResult(
+    val totalScore: Int,
+    val correctAnswers: Int,
+    val questionsAnswered: Int,
+    val prize: Double,
+    val reason: String?
 )
 
 @JsonClass(generateAdapter = true)
-data class MatchmakingQueueDto(
+data class GameSessionDto(
     @Json(name = "id") val id: String,
-    @Json(name = "user_id") val userId: String,
-    @Json(name = "status") val status: String,
-    @Json(name = "match_id") val matchId: String? = null
+    @Json(name = "user_id") val userId: String? = null,
+    @Json(name = "entry_fee") val entryFee: Double = 10.0,
+    @Json(name = "status") val status: String = "IN_PROGRESS",
+    @Json(name = "current_question") val currentQuestion: Int = 1,
+    @Json(name = "total_score") val totalScore: Int = 0,
+    @Json(name = "correct_answers") val correctAnswers: Int = 0,
+    @Json(name = "wrong_answers") val wrongAnswers: Int = 0,
+    @Json(name = "timeouts") val timeouts: Int = 0,
+    @Json(name = "highest_question") val highestQuestion: Int = 0,
+    @Json(name = "started_at") val startedAt: String? = null,
+    @Json(name = "ended_at") val endedAt: String? = null
 )
+

@@ -90,6 +90,9 @@ data class ChatMessageEntity(
     val userId: String,
     val userName: String,
     val message: String,
+    val isVerified: Boolean = false,
+    val hasGoldCrown: Boolean = false,
+    val vipTier: String = "none",
     val isMine: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

@@ -160,21 +160,22 @@ fun StatusPill(
     modifier: Modifier = Modifier
 ) {
     val upper = status.uppercase()
-    val (bgColor, textColor) = when (upper) {
-        "COMPLETED", "SUCCESS", "ACTIVE", "WIN", "LIVE", "VERIFIED" -> Pair(GreenSuccess.copy(alpha = 0.15f), GreenSuccess)
-        "PENDING", "PROCESSING", "UPCOMING", "IN_PROGRESS" -> Pair(GoldAccent.copy(alpha = 0.15f), GoldAccent)
-        "FAILED", "REJECTED", "CANCELLED", "LOSS" -> Pair(RedError.copy(alpha = 0.15f), RedError)
-        else -> Pair(SurfaceDark, TextMuted)
+    val (label, bgColor, textColor) = when (upper) {
+        "APPROVED" -> Triple("✓ APPROVED", GreenSuccess.copy(alpha = 0.2f), GreenSuccess)
+        "COMPLETED", "SUCCESS", "PAID", "ACTIVE", "WIN", "LIVE", "VERIFIED" -> Triple(upper, GreenSuccess.copy(alpha = 0.15f), GreenSuccess)
+        "PENDING", "PROCESSING", "UPCOMING", "IN_PROGRESS", "UNDER_REVIEW" -> Triple(if (upper == "PENDING") "⏳ PENDING" else upper, GoldAccent.copy(alpha = 0.18f), GoldAccent)
+        "FAILED", "REJECTED", "CANCELLED", "LOSS" -> Triple(if (upper == "REJECTED") "✕ REJECTED" else upper, RedError.copy(alpha = 0.18f), RedError)
+        else -> Triple(upper, SurfaceDark, TextMuted)
     }
 
     Surface(
         color = bgColor,
         shape = CircleShape,
-        border = BorderStroke(1.dp, textColor.copy(alpha = 0.3f)),
+        border = BorderStroke(1.dp, textColor.copy(alpha = 0.4f)),
         modifier = modifier
     ) {
         Text(
-            text = upper,
+            text = label,
             color = textColor,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
@@ -403,9 +404,9 @@ fun ArenaBottomNav(
     ) {
         val items = listOf(
             Triple("home", "Home", Icons.Default.Home),
-            Triple("play", "Play", Icons.Default.PlayArrow),
+            Triple("wallet", "Wallet", Icons.Default.AccountBalanceWallet),
+            Triple("leaderboard", "Ranks", Icons.Default.Leaderboard),
             Triple("chat", "Chat", Icons.Default.ChatBubble),
-            Triple("vip", "VIP", Icons.Default.Diamond),
             Triple("profile", "Profile", Icons.Default.Person)
         )
 

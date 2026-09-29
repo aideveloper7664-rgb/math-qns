@@ -2,7 +2,6 @@ package com.example.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,49 +19,24 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.MatchParticipantEntity
-import com.example.data.model.TournamentEntity
 import com.example.data.model.UserEntity
+import com.example.data.remote.GameSessionDto
 import com.example.ui.components.*
 import com.example.ui.theme.*
-
-data class GameModeItem(
-    val id: String,
-    val name: String,
-    val icon: String,
-    val players: Int,
-    val questions: Int,
-    val desc: String,
-    val fees: List<Double>
-)
-
-val defaultModes = listOf(
-    GameModeItem("1v1", "1v1 Duel", "⚔️", 2, 10, "Head-to-head speed battle", listOf(10.0, 25.0, 50.0, 100.0)),
-    GameModeItem("2v2", "2v2 Squad", "🛡️", 4, 10, "Two teams of two players", listOf(20.0, 50.0, 100.0, 200.0)),
-    GameModeItem("4v4", "4v4 Arena", "🏟️", 8, 10, "Two teams of four players", listOf(50.0, 100.0, 250.0, 500.0)),
-    GameModeItem("mega", "Mega Tournament", "👑", 100, 15, "Massive battle royale", listOf(100.0, 250.0, 500.0, 1000.0))
-)
 
 @Composable
 fun HomeScreen(
     user: UserEntity?,
-    recentMatches: List<MatchParticipantEntity>,
-    tournaments: List<TournamentEntity>,
-    topUsers: List<UserEntity>,
-    onQuickPlay: () -> Unit,
-    onSelectMode: (GameModeItem) -> Unit,
+    recentSessions: List<GameSessionDto> = emptyList(),
+    onStartGame: () -> Unit,
     onNavigate: (String) -> Unit
 ) {
     if (user == null) return
 
-    val xpPerLevel = 500
-    val level = (user.xp / xpPerLevel) + 1
-    val xpIntoLevel = user.xp % xpPerLevel
-    val xpProgress = (xpIntoLevel.toFloat() / xpPerLevel.toFloat()).coerceIn(0f, 1f)
-    val winRate = if (user.matchesPlayed > 0) (user.wins.toDouble() / user.matchesPlayed.toDouble()) * 100 else 0.0
+    val balance = user.walletBalance
+    val canPlay = balance >= 10.0
 
     LazyColumn(
         modifier = Modifier
@@ -70,454 +44,442 @@ fun HomeScreen(
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
-        // Hero Section
+        // ── 1. Profile Card ─────────────────────────────────────────────────
         item {
-            Surface(
+            Card(
                 shape = RoundedCornerShape(20.dp),
-                color = SurfaceCard,
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
                 border = BorderStroke(1.dp, BorderStrong),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
             ) {
-                Box(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(
-                            Brush.linearGradient(
-                                listOf(
-                                    CyanPrimary.copy(alpha = 0.15f),
-                                    BlueSecondary.copy(alpha = 0.15f),
-                                    PurpleAccent.copy(alpha = 0.1f)
-                                )
-                            )
-                        )
-                        .padding(20.dp)
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            AvatarCircle(
-                                displayName = user.displayName,
-                                size = 64.dp,
-                                fontSize = 24
-                            )
-                            Spacer(modifier = Modifier.width(14.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = user.displayName,
-                                        fontSize = 18.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = TextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    UserBadges(isVerified = user.isVerified, hasGoldCrown = user.hasGoldCrown)
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RankBadge(rank = user.rank)
-                                    if (user.vipTier != "none") {
-                                        Surface(
-                                            color = GoldAccent.copy(alpha = 0.15f),
-                                            shape = CircleShape,
-                                            border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f))
-                                        ) {
-                                            Text(
-                                                text = "💎 ${user.vipTier.uppercase()}",
-                                                color = GoldAccent,
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Surface(
-                                    color = SurfaceDark,
-                                    shape = CircleShape,
-                                    border = BorderStroke(1.dp, BorderSubtle)
-                                ) {
-                                    Text(
-                                        text = "MMR ${fmtNum(user.mmr)}",
-                                        color = TextPrimary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                                Surface(
-                                    color = SurfaceDark,
-                                    shape = CircleShape,
-                                    border = BorderStroke(1.dp, BorderSubtle)
-                                ) {
-                                    Text(
-                                        text = "Level $level",
-                                        color = TextPrimary,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = "Win Rate ${fmtPct(winRate)}",
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // XP Progress Bar
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("XP · Level $level", fontSize = 11.sp, color = TextMuted)
-                            Text("${fmtNum(xpIntoLevel)} / $xpPerLevel", fontSize = 11.sp, color = TextMuted)
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = { xpProgress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(CircleShape),
-                            color = CyanPrimary,
-                            trackColor = SurfaceDark
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-
-        // Wallet Balance Card
-        item {
-            ArenaCard {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                        .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Wallet", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
-                    Text(
-                        text = "History →",
-                        fontSize = 12.sp,
-                        color = CyanPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { onNavigate("transactions") }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Column {
-                        Text(text = "Available Balance", fontSize = 11.sp, color = TextMuted)
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(CyanPrimary, BlueSecondary))),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = fmtMoney(user.walletBalance),
-                            fontSize = 28.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimary
+                            text = user.displayName.firstOrNull()?.uppercase() ?: "P",
+                            color = BgDark,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Black
                         )
-                        if (user.lockedBalance > 0) {
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        UserNameWithBadges(
+                            displayName = user.displayName,
+                            isVerified = user.isVerified,
+                            hasGoldCrown = user.hasGoldCrown,
+                            vipTier = user.vipTier,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            RankBadge(rank = user.rank)
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "🔒 ${fmtMoney(user.lockedBalance)} locked in play",
-                                fontSize = 11.sp,
-                                color = GoldAccent
+                                text = "MMR ${fmtNum(user.mmr)} • XP ${fmtNum(user.xp)}",
+                                fontSize = 12.sp,
+                                color = TextMuted
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── 2. Wallet Card ──────────────────────────────────────────────────
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCard),
+                border = BorderStroke(1.dp, BorderStrong),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp)
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "WALLET BALANCE",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMuted,
+                            letterSpacing = 1.sp
+                        )
+                        Surface(
+                            color = if (canPlay) GreenSuccess.copy(alpha = 0.15f) else RedError.copy(alpha = 0.15f),
+                            shape = CircleShape,
+                            border = BorderStroke(1.dp, if (canPlay) GreenSuccess.copy(alpha = 0.4f) else RedError.copy(alpha = 0.4f))
+                        ) {
+                            Text(
+                                text = if (canPlay) "READY TO PLAY" else "LOW BALANCE",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (canPlay) GreenSuccess else RedError,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.height(6.dp))
+
+                    Text(
+                        text = "₹${"%.2f".format(balance)}",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Black,
+                        color = TextPrimary
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
                         Button(
                             onClick = { onNavigate("deposit") },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary, contentColor = BgDark),
-                            modifier = Modifier.height(36.dp)
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CyanPrimary)
                         ) {
-                            Text("＋ Add", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = BgDark,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Add Money", color = BgDark, fontWeight = FontWeight.Bold)
                         }
+
                         OutlinedButton(
                             onClick = { onNavigate("withdraw") },
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, BorderStrong),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                            modifier = Modifier.height(36.dp)
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, BorderSubtle),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
                         ) {
-                            Text("Withdraw", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Withdraw", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Quick Play Banner
+        // ── 3. Big "START GAME" Button (CRITICAL) ───────────────────────────
         item {
-            ArenaGoldButton(
-                text = "⚡ QUICK PLAY",
-                onClick = onQuickPlay,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+                Button(
+                    onClick = onStartGame,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF36D399),
+                        disabledContainerColor = Color(0xFF36D399).copy(alpha = 0.35f)
+                    ),
+                    enabled = canPlay,
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "▶",
+                            fontSize = 22.sp,
+                            color = Color.Black,
+                            fontWeight = FontWeight.Black
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "START GAME",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Black,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = "Entry Fee: ₹10 • Progressive Quiz • Win up to 10×",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black.copy(alpha = 0.75f)
+                            )
+                        }
+                    }
+                }
 
-            Spacer(modifier = Modifier.height(20.dp))
+                if (!canPlay) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "⚠️ Minimum ₹10 balance required to play.",
+                            color = RedError,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Deposit Now",
+                            color = CyanPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clip(RoundedCornerShape(4.dp))
+                        )
+                    }
+                }
+            }
         }
 
-        // Game Modes Header
+        // ── 4. Progressive Game Rules Card ──────────────────────────────────
+        item {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceDark,
+                border = BorderStroke(1.dp, BorderSubtle),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⚡", fontSize = 18.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "How Progressive Play Works",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = TextPrimary
+                        )
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    RuleBullet(num = "1", text = "Q1 starts with 10.0s (Easy). Decreases by 0.2s each question down to 8.0s min!")
+                    RuleBullet(num = "2", text = "Answer correctly to advance and gain speed bonus points.")
+                    RuleBullet(num = "3", text = "1 wrong answer or timeout = GAME OVER!")
+                    RuleBullet(num = "4", text = "Prize = Final Score ÷ 100 instantly credited to your wallet (up to ₹100)!")
+                }
+            }
+        }
+
+        // ── Quick Actions ───────────────────────────────────────────────────
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Game Modes", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text(
-                    "See all",
-                    fontSize = 12.sp,
-                    color = CyanPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onNavigate("play") }
-                )
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = SurfaceDark,
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onNavigate("referral") }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🎁", fontSize = 22.sp)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("Refer & Earn", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Get ₹50 / friend", fontSize = 11.sp, color = GreenSuccess)
+                        }
+                    }
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = SurfaceDark,
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onNavigate("leaderboard") }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🏆", fontSize = 22.sp)
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text("Leaderboard", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Global Rankings", fontSize = 11.sp, color = CyanPrimary)
+                        }
+                    }
+                }
             }
         }
 
-        // Modes Grid (2 columns or list)
-        items(defaultModes) { mode ->
-            ArenaCard(
-                onClick = { onSelectMode(mode) },
+
+        // ── 5. Recent Game Sessions ─────────────────────────────────────────
+        item {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 10.dp)
+                    .padding(bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(52.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Brush.linearGradient(listOf(CyanPrimary.copy(alpha = 0.2f), BlueSecondary.copy(alpha = 0.2f))))
-                            .border(1.dp, BorderStrong, RoundedCornerShape(14.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(mode.icon, fontSize = 24.sp)
-                    }
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(mode.name, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                        Text(mode.desc, fontSize = 11.sp, color = TextMuted)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Surface(
-                                color = SurfaceDark,
-                                shape = CircleShape,
-                                border = BorderStroke(1.dp, BorderSubtle)
-                            ) {
-                                Text(
-                                    "from ₹${mode.fees.minOrNull()?.toInt() ?: 10}",
-                                    fontSize = 10.sp,
-                                    color = TextMuted,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                            Surface(
-                                color = SurfaceDark,
-                                shape = CircleShape,
-                                border = BorderStroke(1.dp, BorderSubtle)
-                            ) {
-                                Text(
-                                    "${mode.questions} Qs",
-                                    fontSize = 10.sp,
-                                    color = TextMuted,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = TextMuted
+                Text(
+                    text = "RECENT GAMES",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    letterSpacing = 0.5.sp
+                )
+                if (recentSessions.isNotEmpty()) {
+                    Text(
+                        text = "${recentSessions.size} Sessions",
+                        fontSize = 11.sp,
+                        color = TextMuted
                     )
                 }
             }
         }
 
-        // Quick Access Section
-        item {
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Quick Access", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Spacer(modifier = Modifier.height(10.dp))
-
-            ArenaCard(modifier = Modifier.padding(bottom = 16.dp)) {
-                val quickLinks = listOf(
-                    Triple("vip", "VIP Pass", "💎"),
-                    Triple("referral", "Refer & Earn", "🎁"),
-                    Triple("badges", "My Badges", "🏅"),
-                    Triple("knockout", "Knockout Tournaments", "🎯")
-                )
-
-                quickLinks.forEachIndexed { index, link ->
-                    Row(
+        if (recentSessions.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = SurfaceDark,
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onNavigate(link.first) }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text(link.third, fontSize = 20.sp)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(link.second, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, modifier = Modifier.weight(1f))
-                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = TextMuted)
-                    }
-                    if (index < quickLinks.size - 1) {
-                        HorizontalDivider(color = BorderSubtle, thickness = 0.5.dp)
-                    }
-                }
-            }
-        }
-
-        // Live & Upcoming Tournaments Preview
-        item {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Live & Upcoming Tournaments", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text(
-                    "All",
-                    fontSize = 12.sp,
-                    color = CyanPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onNavigate("tournaments") }
-                )
-            }
-
-            if (tournaments.isEmpty()) {
-                ArenaCard(modifier = Modifier.padding(bottom = 16.dp)) {
-                    Text("No tournaments right now. Check back soon!", fontSize = 12.sp, color = TextMuted)
-                }
-            } else {
-                tournaments.take(2).forEach { t ->
-                    ArenaCard(
-                        onClick = { onNavigate("tournaments") },
-                        modifier = Modifier.padding(bottom = 10.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (t.status == "LIVE") "🔴" else "🏆", fontSize = 24.sp)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(t.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1)
-                                    StatusPill(status = t.status)
-                                }
-                                Text("${t.playersJoined}/${t.maxPlayers} players · Entry ${fmtMoney(t.entryFee)}", fontSize = 11.sp, color = TextMuted)
-                            }
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text("Prize Pool", fontSize = 10.sp, color = TextMuted)
-                                Text(fmtMoney(t.prizePool), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = GoldAccent)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Top Players Preview
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Top Leaderboard", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text(
-                    "Full board",
-                    fontSize = 12.sp,
-                    color = CyanPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onNavigate("leaderboard") }
-                )
-            }
-
-            ArenaCard(modifier = Modifier.padding(bottom = 24.dp)) {
-                topUsers.take(4).forEachIndexed { idx, topUser ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val posColor = when (idx) {
-                            0 -> GoldAccent
-                            1 -> Color(0xFFA9B4C4)
-                            2 -> Color(0xFFC07A4A)
-                            else -> TextMuted
-                        }
+                        Text("🎮", fontSize = 28.sp)
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            text = "${idx + 1}",
+                            text = "No games played yet",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = posColor,
-                            modifier = Modifier.width(24.dp)
-                        )
-                        AvatarCircle(displayName = topUser.displayName, size = 32.dp, fontSize = 12)
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = topUser.displayName,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = TextPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        RankBadge(rank = topUser.rank)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "${topUser.mmr}",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
                             color = TextPrimary
                         )
-                    }
-                    if (idx < topUsers.take(4).size - 1) {
-                        HorizontalDivider(color = BorderSubtle, thickness = 0.5.dp)
+                        Text(
+                            text = "Tap START GAME above to start your progressive streak!",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
                     }
                 }
+            }
+        } else {
+            items(recentSessions.take(10)) { session ->
+                SessionHistoryCard(session = session)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun RuleBullet(num: String, text: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(CyanPrimary.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(num, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontSize = 12.sp, color = TextMuted, lineHeight = 16.sp)
+    }
+}
+
+@Composable
+fun SessionHistoryCard(session: GameSessionDto) {
+    val isWin = session.status.equals("COMPLETED", ignoreCase = true) || session.totalScore >= 100
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = SurfaceDark,
+        border = BorderStroke(1.dp, BorderSubtle),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isWin) GreenSuccess.copy(alpha = 0.2f) else RedError.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(if (isWin) "🏆" else "💔", fontSize = 18.sp)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Reached Q${maxOf(1, session.highestQuestion)} • ${session.correctAnswers} Correct",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp,
+                    color = TextPrimary
+                )
+                Text(
+                    text = "Score: ${session.totalScore} pts",
+                    fontSize = 11.sp,
+                    color = TextMuted
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                val prize = session.totalScore / 100.0
+                if (prize > 0) {
+                    Text(
+                        text = "+₹${"%.2f".format(prize)}",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 14.sp,
+                        color = GreenSuccess
+                    )
+                } else {
+                    Text(
+                        text = "₹0.00",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp,
+                        color = TextMuted
+                    )
+                }
+                Text(
+                    text = session.status,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isWin) GreenSuccess else RedError
+                )
             }
         }
     }

@@ -3,38 +3,37 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import com.example.data.local.AppDatabase
 import com.example.data.model.*
+import com.example.data.remote.GameResult
+import com.example.data.remote.GameSessionDto
+import com.example.data.remote.QuestionData
+import com.example.data.repository.DepositRepository
+import com.example.data.repository.SinglePlayerGameRepository
 import com.example.data.repository.SpeedMathRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 data class GameState(
     val active: Boolean = false,
-    val isMatchmaking: Boolean = false,
-    val mode: String = "1v1",
-    val entryFee: Double = 0.0,
-    val matchId: String? = null,
-    val questions: List<QuestionEntity> = emptyList(),
-    val currentIndex: Int = 0,
+    val sessionId: String? = null,
+    val entryFee: Double = 10.0,
+    val currentQuestion: QuestionData? = null,
+    val questionNumber: Int = 1,
     val score: Int = 0,
-    val correctCount: Int = 0,
-    val answeredCount: Int = 0,
-    val times: List<Double> = emptyList(),
-    val totalTimePerQuestion: Int = 15,
-    val remainingSeconds: Float = 15f,
+    val correctAnswers: Int = 0,
+    val questionsAnswered: Int = 0,
+    val timeLeftMs: Long = 15000L,
+    val timeLimitMs: Long = 15000L,
     val isLocked: Boolean = false,
     val selectedOption: String? = null,
     val lastIsCorrect: Boolean? = null,
-    val lastGainedPoints: Int = 0,
-    val isFinished: Boolean = false,
-    val isPractice: Boolean = false
+    val lastPointsEarned: Int = 0,
+    val isGameOver: Boolean = false,
+    val gameResult: GameResult? = null,
+    val isLoading: Boolean = false
 )
 
 sealed class ToastEvent {
@@ -44,6 +43,9 @@ sealed class ToastEvent {
 class SpeedMathViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = SpeedMathRepository(AppDatabase.getDatabase(application).speedMathDao())
+    private val singlePlayerRepo = SinglePlayerGameRepository()
+    private val depositRepo = DepositRepository()
+
     private var timerJob: Job? = null
     private var questionStartTime: Long = 0
 
@@ -56,9 +58,8 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         if (id == null) flowOf(null) else repository.getUserFlow(id)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    val userMatchHistory: StateFlow<List<MatchParticipantEntity>> = currentUserId.flatMapLatest { id ->
-        if (id == null) flowOf(emptyList()) else repository.getUserMatchParticipants(id)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _recentSessions = MutableStateFlow<List<GameSessionDto>>(emptyList())
+    val recentSessions: StateFlow<List<GameSessionDto>> = _recentSessions.asStateFlow()
 
     val userTransactions: StateFlow<List<TransactionEntity>> = currentUserId.flatMapLatest { id ->
         if (id == null) flowOf(emptyList()) else repository.getUserTransactions(id)
@@ -101,15 +102,30 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     val toastEvent: SharedFlow<ToastEvent> = _toastEvent.asSharedFlow()
 
     init {
+        val sessionUserId = com.example.data.local.SessionManager.userId
+        if (sessionUserId != null) {
+            currentUserId.value = sessionUserId
+            refreshUserData(sessionUserId)
+            refreshRecentSessions(sessionUserId)
+        }
+    }
+
+    private fun refreshUserData(userId: String) {
         viewModelScope.launch {
-            // Restore session persisted from a previous app launch
-            val persistedUserId = com.example.data.remote.SupabaseClient.currentUserId
-            val persistedToken = com.example.data.remote.SupabaseClient.authToken
-            if (persistedUserId != null && persistedToken != null) {
-                currentUserId.value = persistedUserId
-                android.util.Log.d("AUTH", "✅ Session restored for userId=$persistedUserId")
+            repository.fetchAndSyncUserProfile(userId, null)
+            refreshRecentSessions(userId)
+        }
+    }
+
+    fun refreshRecentSessions(userId: String = currentUserId.value ?: "") {
+        if (userId.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val sessions = singlePlayerRepo.getRecentGameSessions(userId)
+                _recentSessions.value = sessions
+            } catch (e: Exception) {
+                // ignore
             }
-            repository.syncAllRealDataFromSupabase(currentUserId.value)
         }
     }
 
@@ -118,21 +134,21 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             val user = repository.supabaseSignIn(email, pass)
             if (user != null) {
                 currentUserId.value = user.id
-                repository.syncAllRealDataFromSupabase(user.id)
+                refreshUserData(user.id)
                 _toastEvent.emit(ToastEvent.Show("Welcome back, ${user.displayName}!"))
             } else {
-                _toastEvent.emit(ToastEvent.Show("Sign in failed. Please check your credentials.", true))
+                _toastEvent.emit(ToastEvent.Show("Authentication failed. Check your connection or credentials.", true))
             }
         }
     }
 
-    fun register(email: String, pass: String, username: String, refCode: String?) {
+    fun register(email: String, pass: String, name: String, refCode: String?) {
         viewModelScope.launch {
-            val user = repository.supabaseSignUp(email, pass, username, refCode)
+            val user = repository.supabaseSignUp(email, pass, name, refCode)
             if (user != null) {
                 currentUserId.value = user.id
-                repository.syncAllRealDataFromSupabase(user.id)
-                _toastEvent.emit(ToastEvent.Show("Account created! Welcome to SpeedMath Arena."))
+                refreshUserData(user.id)
+                _toastEvent.emit(ToastEvent.Show("Account created! Welcome, ${user.displayName}."))
             } else {
                 _toastEvent.emit(ToastEvent.Show("Registration failed. Please try again.", true))
             }
@@ -140,249 +156,202 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun logout() {
-        com.example.data.remote.SupabaseClient.clearSession()
+        com.example.data.local.SessionManager.clearSession()
         currentUserId.value = null
-        viewModelScope.launch {
-            _toastEvent.emit(ToastEvent.Show("Signed out successfully."))
-        }
-    }
-
-    fun updateProfile(displayName: String, photoUrl: String?) {
-        viewModelScope.launch {
-            val user = currentUser.value ?: return@launch
-            val updated = user.copy(
-                displayName = displayName.ifBlank { user.displayName },
-                photoUrl = photoUrl?.ifBlank { null }
-            )
-            repository.updateUser(updated)
-            _toastEvent.emit(ToastEvent.Show("Profile updated."))
-        }
-    }
-
-    private val matchmakingRepo = com.example.data.repository.MatchmakingRepository()
-    private var matchmakingJob: Job? = null
-    private var matchmakingTimerJob: Job? = null
-
-    // Elapsed search time shown on UI (seconds)
-    val matchmakingElapsed = MutableStateFlow(0)
-
-    // Fired when a real match_id arrives — UI navigates to game
-    private val _matchFoundEvent = MutableSharedFlow<String>()
-    val matchFoundEvent: SharedFlow<String> = _matchFoundEvent.asSharedFlow()
-
-    fun startMatchmaking(mode: String, entryFee: Double) {
-        val user = currentUser.value ?: run {
-            viewModelScope.launch {
-                _toastEvent.emit(ToastEvent.Show("Please sign in first.", true))
-            }
-            return
-        }
-        if (entryFee > 0 && user.walletBalance < entryFee) {
-            viewModelScope.launch {
-                _toastEvent.emit(ToastEvent.Show("Insufficient wallet balance.", true))
-            }
-            return
-        }
-
-        // Set UI to searching state
-        _gameState.value = GameState(
-            active = false,
-            isMatchmaking = true,
-            mode = mode,
-            entryFee = entryFee,
-            isPractice = false
-        )
-        matchmakingElapsed.value = 0
-
-        // Timer — increments every second for UI display
-        matchmakingTimerJob?.cancel()
-        matchmakingTimerJob = viewModelScope.launch {
-            while (true) {
-                delay(1000)
-                matchmakingElapsed.value += 1
-            }
-        }
-
-        // Real matchmaking call + polling
-        matchmakingJob?.cancel()
-        matchmakingJob = viewModelScope.launch {
-            val userId = user.id
-
-            // 1. Call Edge Function to join queue
-            val joinResp = matchmakingRepo.joinMatchmaking(mode, entryFee)
-
-            if (!joinResp.success && joinResp.error != null) {
-                // Edge Function rejected — show error, reset state
-                _gameState.value = GameState()
-                matchmakingTimerJob?.cancel()
-                _toastEvent.emit(ToastEvent.Show(joinResp.error, true))
-                return@launch
-            }
-
-            if (joinResp.matched && !joinResp.matchId.isNullOrBlank()) {
-                // Instantly matched (someone was already waiting)
-                handleMatchFound(joinResp.matchId, mode, entryFee)
-                return@launch
-            }
-
-            // 2. Not yet matched — poll until status = "matched"
-            matchmakingRepo.observeMatchFound(userId).collect { matchId ->
-                if (matchId.isBlank()) {
-                    // Timed out
-                    _gameState.value = GameState()
-                    matchmakingTimerJob?.cancel()
-                    _toastEvent.emit(ToastEvent.Show("No opponent found. Try again!", true))
-                } else {
-                    handleMatchFound(matchId, mode, entryFee)
-                }
-            }
-        }
-    }
-
-    private suspend fun handleMatchFound(matchId: String, mode: String, entryFee: Double) {
-        matchmakingTimerJob?.cancel()
-        _gameState.value = _gameState.value.copy(
-            isMatchmaking = false,
-            matchId = matchId
-        )
-        _matchFoundEvent.emit(matchId)
-    }
-
-    fun cancelMatchmaking() {
-        matchmakingJob?.cancel()
-        matchmakingTimerJob?.cancel()
-        matchmakingElapsed.value = 0
         _gameState.value = GameState()
-        // Fire-and-forget cancel on backend
+    }
+
+    fun updateProfile(name: String, photoUrl: String?) {
+        val userId = currentUserId.value ?: return
         viewModelScope.launch {
-            try { matchmakingRepo.cancelMatchmaking() } catch (_: Exception) {}
+            repository.updateUserProfile(userId, name, photoUrl)
+            _toastEvent.emit(ToastEvent.Show("Profile updated!"))
         }
     }
 
-    fun startPracticeMode() {
-        startMatchGame("practice", 0.0, true)
-    }
+    // ─── SINGLE-PLAYER PROGRESSIVE GAME ACTIONS ───────────────────────────────
 
-    private fun startMatchGame(mode: String, entryFee: Double, isPractice: Boolean) {
+    fun startGame() {
+        val user = currentUser.value
+        if (user == null) {
+            viewModelScope.launch {
+                _toastEvent.emit(ToastEvent.Show("Please login first to play.", true))
+            }
+            return
+        }
+
+        if (user.walletBalance < 10.0) {
+            viewModelScope.launch {
+                _toastEvent.emit(ToastEvent.Show("Minimum ₹10 balance required to play. Please Add Money.", true))
+            }
+            return
+        }
+
+        _gameState.value = GameState(isLoading = true)
+
         viewModelScope.launch {
-            val questions = repository.getQuestionsForGame(10)
+            val startResp = singlePlayerRepo.startGame()
+            if (!startResp.success || startResp.sessionId.isNullOrBlank()) {
+                val err = startResp.error ?: "Failed to start game"
+                _gameState.value = GameState()
+                _toastEvent.emit(ToastEvent.Show(err, true))
+                return@launch
+            }
+
+            val sessionId = startResp.sessionId
+            val entryFee = startResp.entryFee
+
+            // Deduct balance locally from StateFlow until refreshed
+            if (startResp.newBalance != null) {
+                repository.updateLocalBalance(user.id, startResp.newBalance)
+            } else {
+                repository.updateLocalBalance(user.id, (user.walletBalance - entryFee).coerceAtLeast(0.0))
+            }
+
             _gameState.value = GameState(
                 active = true,
-                isMatchmaking = false,
-                mode = mode,
+                sessionId = sessionId,
                 entryFee = entryFee,
-                matchId = UUID.randomUUID().toString(),
-                questions = questions,
-                currentIndex = 0,
+                questionNumber = 1,
                 score = 0,
-                correctCount = 0,
-                answeredCount = 0,
-                times = emptyList(),
-                totalTimePerQuestion = 15,
-                remainingSeconds = 15f,
-                isLocked = false,
-                isFinished = false,
-                isPractice = isPractice
+                correctAnswers = 0,
+                questionsAnswered = 0,
+                isLoading = true
             )
-            startQuestionTimer()
+
+            loadQuestion(sessionId, 1, 0, 0)
         }
     }
 
-    private fun startQuestionTimer() {
+    private fun loadQuestion(sessionId: String, qNumber: Int, currentScore: Int, correctCount: Int) {
+        viewModelScope.launch {
+            val q = singlePlayerRepo.getNextQuestion(sessionId, qNumber)
+            _gameState.value = _gameState.value.copy(
+                active = true,
+                isLoading = false,
+                currentQuestion = q,
+                questionNumber = qNumber,
+                score = currentScore,
+                correctAnswers = correctCount,
+                timeLeftMs = q.timeLimitMs,
+                timeLimitMs = q.timeLimitMs,
+                isLocked = false,
+                selectedOption = null,
+                lastIsCorrect = null,
+                lastPointsEarned = 0,
+                isGameOver = false,
+                gameResult = null
+            )
+            startCountdownTimer()
+        }
+    }
+
+    private fun startCountdownTimer() {
         timerJob?.cancel()
         questionStartTime = System.currentTimeMillis()
 
         timerJob = viewModelScope.launch {
-            val totalSec = _gameState.value.totalTimePerQuestion
-            var currentSec = totalSec.toFloat()
-
-            while (currentSec > 0f && _gameState.value.active && !_gameState.value.isLocked) {
-                delay(100)
-                currentSec -= 0.1f
-                _gameState.value = _gameState.value.copy(remainingSeconds = maxOf(0f, currentSec))
+            var remaining = _gameState.value.timeLeftMs
+            while (remaining > 0 && _gameState.value.active && !_gameState.value.isLocked) {
+                delay(50)
+                remaining -= 50
+                _gameState.value = _gameState.value.copy(timeLeftMs = maxOf(0L, remaining))
             }
 
-            if (currentSec <= 0f && !_gameState.value.isLocked) {
+            if (remaining <= 0 && !_gameState.value.isLocked && _gameState.value.active) {
+                // Timeout auto-submit
                 submitAnswer(null)
             }
         }
     }
 
-    fun submitAnswer(selectedOption: String?) {
+    fun submitAnswer(answer: String?) {
         val state = _gameState.value
-        if (state.isLocked || !state.active || state.isFinished) return
+        if (state.isLocked || !state.active || state.isGameOver) return
 
         timerJob?.cancel()
-        val currentQ = state.questions.getOrNull(state.currentIndex) ?: return
-        val elapsedSec = (System.currentTimeMillis() - questionStartTime) / 1000.0
-        val isCorrect = selectedOption != null && selectedOption == currentQ.correctAnswer
+        val question = state.currentQuestion ?: return
+        val sessionId = state.sessionId ?: return
+        val responseTimeMs = (state.timeLimitMs - state.timeLeftMs).coerceAtLeast(0L)
 
-        var gained = 0
-        if (isCorrect) {
-            val speedFactor = 0.5f + 0.5f * (state.remainingSeconds / state.totalTimePerQuestion)
-            gained = (100 * speedFactor).toInt()
-        }
-
-        val newScore = state.score + gained
-        val newCorrect = if (isCorrect) state.correctCount + 1 else state.correctCount
-        val newAnswered = state.answeredCount + 1
-        val newTimes = state.times + elapsedSec
-
+        // Lock UI immediately
         _gameState.value = state.copy(
             isLocked = true,
-            selectedOption = selectedOption,
-            lastIsCorrect = isCorrect,
-            lastGainedPoints = gained,
-            score = newScore,
-            correctCount = newCorrect,
-            answeredCount = newAnswered,
-            times = newTimes
+            selectedOption = answer
         )
 
         viewModelScope.launch {
-            delay(1200)
-            val nextIndex = state.currentIndex + 1
-            if (nextIndex >= state.questions.size) {
-                finishGame()
-            } else {
-                _gameState.value = _gameState.value.copy(
-                    currentIndex = nextIndex,
-                    remainingSeconds = state.totalTimePerQuestion.toFloat(),
-                    isLocked = false,
-                    selectedOption = null,
-                    lastIsCorrect = null,
-                    lastGainedPoints = 0
-                )
-                startQuestionTimer()
-            }
-        }
-    }
-
-    private fun finishGame() {
-        timerJob?.cancel()
-        val state = _gameState.value
-        val userId = currentUserId.value ?: return
-
-        _gameState.value = state.copy(
-            active = false,
-            isFinished = true
-        )
-
-        viewModelScope.launch {
-            repository.recordMatchResults(
-                userId = userId,
-                mode = state.mode,
-                entryFee = state.entryFee,
-                score = state.score,
-                correctAnswers = state.correctCount,
-                totalQuestions = state.questions.size,
-                isPractice = state.isPractice
+            val submitResp = singlePlayerRepo.submitAnswer(
+                sessionId = sessionId,
+                question = question,
+                answer = answer,
+                responseTimeMs = responseTimeMs,
+                currentScore = state.score,
+                correctCount = state.correctAnswers
             )
+
+            if (submitResp.correct) {
+                // Correct answer! Show green feedback, add score, load next question
+                val newScore = submitResp.totalScore
+                val newCorrect = state.correctAnswers + 1
+                val newAnswered = state.questionsAnswered + 1
+
+                _gameState.value = state.copy(
+                    isLocked = true,
+                    selectedOption = answer,
+                    lastIsCorrect = true,
+                    lastPointsEarned = submitResp.pointsEarned,
+                    score = newScore,
+                    correctAnswers = newCorrect,
+                    questionsAnswered = newAnswered
+                )
+
+                delay(800)
+                loadQuestion(sessionId, state.questionNumber + 1, newScore, newCorrect)
+            } else {
+                // Wrong answer or timeout -> Game Over!
+                val newAnswered = state.questionsAnswered + 1
+                _gameState.value = state.copy(
+                    isLocked = true,
+                    selectedOption = answer,
+                    lastIsCorrect = false,
+                    lastPointsEarned = 0,
+                    questionsAnswered = newAnswered
+                )
+
+                delay(1000)
+
+                val result = GameResult(
+                    totalScore = submitResp.totalScore,
+                    correctAnswers = state.correctAnswers,
+                    questionsAnswered = newAnswered,
+                    prize = submitResp.prize,
+                    reason = submitResp.reason ?: if (answer == null) "Time Out" else "Wrong Answer"
+                )
+
+                _gameState.value = state.copy(
+                    active = false,
+                    isGameOver = true,
+                    gameResult = result
+                )
+
+                // Refresh user wallet & session list
+                currentUserId.value?.let { uid ->
+                    refreshUserData(uid)
+                }
+            }
         }
     }
 
     fun quitGame() {
         timerJob?.cancel()
+        val sid = _gameState.value.sessionId
+        if (sid != null) {
+            viewModelScope.launch {
+                singlePlayerRepo.endGame(sid)
+                currentUserId.value?.let { refreshUserData(it) }
+            }
+        }
         _gameState.value = GameState()
     }
 
@@ -390,15 +359,47 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         val userId = currentUserId.value ?: return
         viewModelScope.launch {
             repository.fetchAndSyncUserProfile(userId, null)
+            refreshRecentSessions(userId)
         }
     }
 
-    fun withdraw(amount: Double, method: String, account: String) {
+    val userReferrals = currentUserId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else flow {
+            emit(repository.getUserReferrals(id))
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val userWithdrawals = currentUserId.flatMapLatest { id ->
+        if (id == null) flowOf(emptyList()) else repository.getUserWithdrawalsFlow(id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun syncWithdrawals() {
         val userId = currentUserId.value ?: return
         viewModelScope.launch {
-            val success = repository.withdrawMoney(userId, amount, method, account)
+            repository.syncUserWithdrawals(userId)
+            refreshUserData(userId)
+            _toastEvent.emit(ToastEvent.Show("Withdrawal status refreshed."))
+        }
+    }
+
+    fun approveWithdrawal() {
+        val userId = currentUserId.value ?: return
+        viewModelScope.launch {
+            val ok = repository.approveWithdrawal(userId)
+            if (ok) {
+                _toastEvent.emit(ToastEvent.Show("Withdrawal APPROVED! 🎉"))
+                refreshUserData(userId)
+            }
+        }
+    }
+
+    fun withdraw(amount: Double, method: String, account: String, accountHolder: String = "") {
+        val userId = currentUserId.value ?: return
+        viewModelScope.launch {
+            val success = repository.withdrawMoney(userId, amount, method, account, accountHolder)
             if (success) {
                 _toastEvent.emit(ToastEvent.Show("Withdrawal of ₹${amount.toInt()} requested."))
+                refreshUserData(userId)
             } else {
                 _toastEvent.emit(ToastEvent.Show("Withdrawal failed.", true))
             }
@@ -411,6 +412,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             val success = repository.purchaseVipPass(userId, tier, price, days)
             if (success) {
                 _toastEvent.emit(ToastEvent.Show("VIP Pass activated!"))
+                refreshUserData(userId)
             } else {
                 _toastEvent.emit(ToastEvent.Show("Purchase failed. Insufficient balance.", true))
             }

@@ -108,8 +108,5 @@ object SupabaseClient {
     val restApi: SupabaseRestApi by lazy {
         retrofit.create(SupabaseRestApi::class.java)
     }
-
-    val matchmakingApi: SupabaseMatchmakingApi by lazy {
-        retrofit.create(SupabaseMatchmakingApi::class.java)
-    }
 }
+

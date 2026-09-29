@@ -12,7 +12,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.ArenaBottomNav
@@ -28,13 +27,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // RESTORE SESSION before any data fetch
+        com.example.data.remote.SupabaseClient.init(this)
+        com.example.data.local.SessionManager.loadSession()
+        val sessionUserId = com.example.data.local.SessionManager.userId
+        val sessionEmail = com.example.data.local.SessionManager.userEmail
+        if (sessionUserId != null) {
+            android.util.Log.d("AUTH", "✅ Session restored for $sessionEmail ($sessionUserId)")
+        } else {
+            android.util.Log.d("AUTH", "⚠️ No session found — user not logged in")
+        }
+
         setContent {
             SpeedMathTheme {
                 val viewModel: SpeedMathViewModel = viewModel()
                 val context = LocalContext.current
 
                 val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
-                val recentMatches by viewModel.userMatchHistory.collectAsStateWithLifecycle()
+                val recentSessions by viewModel.recentSessions.collectAsStateWithLifecycle()
+                val userReferrals by viewModel.userReferrals.collectAsStateWithLifecycle()
+                val userWithdrawals by viewModel.userWithdrawals.collectAsStateWithLifecycle()
                 val userTransactions by viewModel.userTransactions.collectAsStateWithLifecycle()
                 val topUsersByMmr by viewModel.topUsersByMmr.collectAsStateWithLifecycle()
                 val topUsersByXp by viewModel.topUsersByXp.collectAsStateWithLifecycle()
@@ -71,17 +83,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Real-time matchmaking: navigate to game when match found
-                val matchmakingElapsed by viewModel.matchmakingElapsed.collectAsState()
-                LaunchedEffect(Unit) {
-                    viewModel.matchFoundEvent.collect { matchId ->
-                        if (matchId.isNotBlank()) {
-                            // Navigate to game screen with real matchId
-                            currentRoute = "game"
-                        }
-                    }
-                }
-
                 // Global Payment Activity Listener
                 DisposableEffect(Unit) {
                     (application as? SpeedMathApp)?.paymentListener = { success, depositId, message ->
@@ -99,7 +100,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Handle Back Button
-                if (currentRoute != "home" && !gameState.active && !gameState.isMatchmaking) {
+                if (currentRoute != "home" && !gameState.active && !gameState.isGameOver) {
                     BackHandler {
                         when (currentRoute) {
                             "checkout" -> currentRoute = "deposit"
@@ -113,45 +114,21 @@ class MainActivity : ComponentActivity() {
 
                 if (currentUser == null) {
                     AuthScreen(
-                        onLogin = { email, name ->
-                            viewModel.login(email, name)
+                        onLogin = { email, pass ->
+                            viewModel.login(email, pass)
                         },
                         onRegister = { email, pass, name, refCode ->
                             viewModel.register(email, pass, name, refCode)
                         }
                     )
-                } else if (gameState.isMatchmaking) {
-                    MatchmakingScreen(
-                        mode = gameState.mode,
-                        entryFee = gameState.entryFee,
-                        elapsedSeconds = matchmakingElapsed,
-                        matchFound = !gameState.matchId.isNullOrBlank() && !gameState.isMatchmaking,
-                        matchId = gameState.matchId,
-                        onCancel = {
-                            viewModel.cancelMatchmaking()
-                            currentRoute = "play"
-                        },
-                        onPlayPractice = {
-                            viewModel.cancelMatchmaking()
-                            viewModel.startPracticeMode()
-                        },
-                        onMatchNavigate = { matchId ->
-                            currentRoute = "game"
-                        }
-                    )
-                } else if (gameState.active || gameState.isFinished) {
+                } else if (gameState.active || gameState.isGameOver) {
                     GameScreen(
                         state = gameState,
-                        onOptionSelected = { key ->
-                            viewModel.submitAnswer(key)
-                        },
-                        onQuit = {
-                            viewModel.quitGame()
-                            currentRoute = "play"
+                        onAnswer = { answer ->
+                            viewModel.submitAnswer(answer)
                         },
                         onPlayAgain = {
-                            viewModel.quitGame()
-                            viewModel.startPracticeMode()
+                            viewModel.startGame()
                         },
                         onGoHome = {
                             viewModel.quitGame()
@@ -174,7 +151,7 @@ class MainActivity : ComponentActivity() {
                             )
                         },
                         bottomBar = {
-                            if (currentRoute in listOf("home", "play", "chat", "vip", "profile")) {
+                            if (currentRoute in listOf("home", "wallet", "leaderboard", "chat", "profile")) {
                                 ArenaBottomNav(
                                     currentRoute = currentRoute,
                                     onNavigate = { route -> currentRoute = route }
@@ -195,25 +172,9 @@ class MainActivity : ComponentActivity() {
                                 when (route) {
                                     "home" -> HomeScreen(
                                         user = currentUser,
-                                        recentMatches = recentMatches,
-                                        tournaments = allTournaments,
-                                        topUsers = topUsersByMmr,
-                                        onQuickPlay = {
-                                            viewModel.startMatchmaking("1v1", 10.0)
-                                        },
-                                        onSelectMode = { mode ->
-                                            viewModel.startMatchmaking(mode.id, mode.fees.firstOrNull() ?: 10.0)
-                                        },
-                                        onNavigate = { target -> currentRoute = target }
-                                    )
-
-                                    "play" -> PlayScreen(
-                                        user = currentUser,
-                                        onStartMatchmaking = { mode, fee ->
-                                            viewModel.startMatchmaking(mode, fee)
-                                        },
-                                        onStartPractice = {
-                                            viewModel.startPracticeMode()
+                                        recentSessions = recentSessions,
+                                        onStartGame = {
+                                            viewModel.startGame()
                                         },
                                         onNavigate = { target -> currentRoute = target }
                                     )
@@ -221,7 +182,9 @@ class MainActivity : ComponentActivity() {
                                     "wallet" -> WalletScreen(
                                         user = currentUser,
                                         transactions = userTransactions,
-                                        onNavigate = { target -> currentRoute = target }
+                                        onNavigate = { target -> currentRoute = target },
+                                        onRefreshWithdrawals = { viewModel.syncWithdrawals() },
+                                        onApproveWithdrawal = { viewModel.approveWithdrawal() }
                                     )
 
                                     "deposit", "add_money" -> AddMoneyScreen(
@@ -263,9 +226,12 @@ class MainActivity : ComponentActivity() {
 
                                     "withdraw" -> WithdrawScreen(
                                         user = currentUser,
-                                        onWithdraw = { amt, method, acc ->
-                                            viewModel.withdraw(amt, method, acc)
+                                        withdrawals = userWithdrawals,
+                                        onWithdraw = { amt, method, acc, holder ->
+                                            viewModel.withdraw(amt, method, acc, holder)
                                         },
+                                        onRefreshWithdrawals = { viewModel.syncWithdrawals() },
+                                        onApproveWithdrawal = { viewModel.approveWithdrawal() },
                                         onBack = { currentRoute = "wallet" }
                                     )
 
@@ -303,6 +269,7 @@ class MainActivity : ComponentActivity() {
 
                                     "referral" -> ReferralScreen(
                                         user = currentUser,
+                                        referrals = userReferrals,
                                         onBack = { currentRoute = "home" }
                                     )
 
@@ -313,7 +280,7 @@ class MainActivity : ComponentActivity() {
 
                                     "knockout" -> KnockoutScreen(
                                         tournaments = allKnockoutTournaments,
-                                        onBack = { currentRoute = "play" }
+                                        onBack = { currentRoute = "home" }
                                     )
 
                                     "profile" -> ProfileScreen(
@@ -340,14 +307,9 @@ class MainActivity : ComponentActivity() {
 
                                     else -> HomeScreen(
                                         user = currentUser,
-                                        recentMatches = recentMatches,
-                                        tournaments = allTournaments,
-                                        topUsers = topUsersByMmr,
-                                        onQuickPlay = {
-                                            viewModel.startMatchmaking("1v1", 10.0)
-                                        },
-                                        onSelectMode = { mode ->
-                                            viewModel.startMatchmaking(mode.id, mode.fees.firstOrNull() ?: 10.0)
+                                        recentSessions = recentSessions,
+                                        onStartGame = {
+                                            viewModel.startGame()
                                         },
                                         onNavigate = { target -> currentRoute = target }
                                     )

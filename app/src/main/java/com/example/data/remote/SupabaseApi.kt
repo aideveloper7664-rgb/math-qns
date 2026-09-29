@@ -27,7 +27,8 @@ interface SupabaseRestApi {
         @Query("select") select: String = "*",
         @Query("order") order: String? = "mmr.desc",
         @Query("limit") limit: Int? = 50,
-        @Query("id") idFilter: String? = null
+        @Query("id") idFilter: String? = null,
+        @Query("referral_code") refCodeFilter: String? = null
     ): Response<List<SupabaseUserDto>>
 
     @POST("rest/v1/users")
@@ -35,6 +36,12 @@ interface SupabaseRestApi {
         @Header("Prefer") prefer: String = "return=representation",
         @Body user: SupabaseUserDto
     ): Response<List<SupabaseUserDto>>
+
+    @POST("rest/v1/users")
+    suspend fun insertUserMap(
+        @Header("Prefer") prefer: String = "resolution=merge-duplicates,return=representation",
+        @Body user: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<List<Map<String, Any?>>>
 
     @PATCH("rest/v1/users")
     suspend fun updateUser(
@@ -142,6 +149,32 @@ interface SupabaseRestApi {
         @Body withdrawal: SupabaseWithdrawalDto
     ): Response<Unit>
 
+    @GET("rest/v1/withdrawals")
+    suspend fun getWithdrawals(
+        @Query("user_id") userQuery: String,
+        @Query("select") select: String = "*",
+        @Query("order") order: String = "created_at.desc"
+    ): Response<List<SupabaseWithdrawalDto>>
+
+    @PATCH("rest/v1/withdrawals")
+    suspend fun updateWithdrawal(
+        @Query("id") idQuery: String,
+        @Body updates: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Unit>
+
+    @GET("rest/v1/referrals")
+    suspend fun getReferrals(
+        @Query("referrer_id") referrerQuery: String,
+        @Query("select") select: String = "*",
+        @Query("order") order: String = "created_at.desc"
+    ): Response<List<SupabaseReferralDto>>
+
+    @POST("rest/v1/referrals")
+    suspend fun insertReferral(
+        @Body referral: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Unit>
+
+
     @POST("rest/v1/match_participants")
     suspend fun postMatchParticipant(
         @Body participant: SupabaseMatchParticipantDto
@@ -151,21 +184,45 @@ interface SupabaseRestApi {
     suspend fun getAppSettings(
         @Query("select") select: String = "*"
     ): Response<List<SupabaseSettingDto>>
+
+    // ─── Single-Player Progressive Game RPCs ────────────────────────────────
+    @POST("rest/v1/rpc/start_game")
+    suspend fun startGameRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any?> = emptyMap()
+    ): Response<Map<String, Any?>>
+
+    @POST("rest/v1/rpc/get_next_question")
+    suspend fun getNextQuestionRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Map<String, Any?>>
+
+    @POST("rest/v1/rpc/submit_answer")
+    suspend fun submitAnswerRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Map<String, Any?>>
+
+    @POST("rest/v1/rpc/end_game")
+    suspend fun endGameRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Map<String, Any?>>
+
+    @GET("rest/v1/game_sessions")
+    suspend fun getGameSessions(
+        @Query("user_id") userQuery: String,
+        @Query("order") order: String = "started_at.desc",
+        @Query("limit") limit: Int = 30
+    ): Response<List<GameSessionDto>>
+
+    @PATCH("rest/v1/game_sessions")
+    suspend fun updateGameSession(
+        @Query("id") idQuery: String,
+        @Header("Prefer") prefer: String = "return=representation",
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<List<GameSessionDto>>
+
+    @POST("rest/v1/game_session_questions")
+    suspend fun insertSessionQuestion(
+        @Body body: Map<String, @JvmSuppressWildcards Any?>
+    ): Response<Unit>
 }
 
-interface SupabaseMatchmakingApi {
-    @POST("functions/v1/join-matchmaking")
-    suspend fun joinMatchmaking(
-        @Body request: JoinMatchmakingRequest
-    ): retrofit2.Response<JoinMatchmakingResponse>
-
-    @POST("functions/v1/cancel-matchmaking")
-    suspend fun cancelMatchmaking(): retrofit2.Response<CancelMatchmakingResponse>
-
-    @GET("rest/v1/matchmaking_queue")
-    suspend fun pollQueue(
-        @Query("user_id") userIdFilter: String, // e.g. "eq.<uuid>"
-        @Query("select") select: String = "id,user_id,status,match_id",
-        @Query("limit") limit: Int = 1
-    ): retrofit2.Response<List<MatchmakingQueueDto>>
-}

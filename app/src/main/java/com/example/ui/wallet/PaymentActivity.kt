@@ -66,7 +66,17 @@ class PaymentActivity : ComponentActivity() {
                 finishPayment(false, depositId, "Payment timed out")
                 true
             }
+            url.startsWith("upi://") || url.startsWith("intent://") -> {
+                try {
+                    val intent = android.content.Intent.parseUri(url, android.content.Intent.URI_INTENT_SCHEME)
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(this@PaymentActivity, "No UPI app found", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                true
+            }
             isAllowedPaymentUrl(url) -> {
+
                 false // Load inside WebView
             }
             else -> {

@@ -49,6 +49,15 @@ interface SpeedMathDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity)
 
+    @Query("UPDATE transactions SET status = :status WHERE id = :transactionId")
+    suspend fun updateTransactionStatus(transactionId: String, status: String)
+
+    @Query("UPDATE transactions SET status = :status WHERE userId = :userId AND type = 'withdrawal' AND status != :status")
+    suspend fun updateAllWithdrawalStatus(userId: String, status: String)
+
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND type = 'withdrawal' ORDER BY createdAt DESC")
+    fun getUserWithdrawalsFlow(userId: String): Flow<List<TransactionEntity>>
+
     // Questions
     @Query("SELECT * FROM questions")
     suspend fun getAllQuestions(): List<QuestionEntity>

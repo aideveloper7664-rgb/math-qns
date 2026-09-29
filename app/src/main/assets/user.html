@@ -259,8 +259,10 @@
     async function loadUserProfile() {
       const { data: { user } } = await supabaseClient.auth.getUser();
       if (!user) {
-        // Fallback demo/active user if session empty
-        currentUser = { id: 'demo-user', email: 'player@mathbaazi.com' };
+        // Not authenticated — redirect to login instead of using a fake demo user
+        currentUser = null;
+        navigateTo('login');
+        return;
       } else {
         currentUser = user;
       }
@@ -463,15 +465,21 @@
 
       try {
         const { data: { user } } = await supabaseClient.auth.getUser();
-        const userId = user ? user.id : (currentUser ? currentUser.id : 'demo-user');
-        const userEmail = user?.email || 'player@mathbaazi.com';
+        if (!user) {
+          showToast('Please login first', 'error');
+          navigateTo('login');
+          return;
+        }
+        const userId = user.id;
+        // Use display_name from profile if available, fall back to email
+        const userName = userProfile?.display_name || user.email || userId;
 
-        // 1. Create deposit record (PENDING)
+        // 1. Create deposit record (PENDING) — user_name is required by RLS
         const { data: deposit, error: depErr } = await supabaseClient
           .from('deposits')
           .insert({
             user_id: userId,
-            user_name: userEmail,
+            user_name: userName,
             amount: amount,
             gateway: 'zapupi',
             status: 'PENDING'

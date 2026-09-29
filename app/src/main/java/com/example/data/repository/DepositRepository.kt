@@ -63,25 +63,19 @@ class DepositRepository {
         }
 
         // 2. Get current user ID & session
-        val userId = SupabaseClient.currentUserId ?: throw Exception("Please sign in first")
-        val token = SupabaseClient.authToken ?: throw Exception("Session expired. Please sign in again")
+        val userId = SupabaseClient.currentUserId 
+            ?: com.example.data.local.SessionManager.userId 
+            ?: throw Exception("Please sign in first")
+        val token = SupabaseClient.authToken 
+            ?: com.example.data.local.SessionManager.authToken 
+            ?: throw Exception("Session expired. Please sign in again")
 
-        // 3. Fetch user_name (required by RLS policy on deposits table)
-        val userName: String = try {
-            val res = SupabaseClient.restApi.getUsers(idFilter = "eq.$userId")
-            if (res.isSuccessful && !res.body().isNullOrEmpty()) {
-                res.body()!!.first().displayName?.takeIf { it.isNotBlank() }
-                    ?: res.body()!!.first().email
-                    ?: SupabaseClient.currentUserEmail
-                    ?: "user"
-            } else {
-                SupabaseClient.currentUserEmail ?: "user"
-            }
-        } catch (e: Exception) {
-            SupabaseClient.currentUserEmail ?: "user"
-        }
+        // 3. Get user name for deposit record (CRITICAL for RLS & database constraints)
+        val userName = com.example.data.local.SessionManager.displayName 
+            ?: com.example.data.local.SessionManager.userEmail 
+            ?: "Player"
 
-        // 4. Insert into deposits table (user_name is CRITICAL — RLS checks it)
+        // Insert into deposits table with user_name
         val depositPayload = mapOf(
             "user_id" to userId,
             "user_name" to userName,
@@ -90,7 +84,6 @@ class DepositRepository {
             "status" to "PENDING"
         )
 
-        // Actually insert the deposit row
         val createRes = try {
             SupabaseClient.restApi.insertDepositRow(deposit = depositPayload)
         } catch (e: Exception) {
@@ -104,7 +97,7 @@ class DepositRepository {
         val depositRow = createRes.body()!!.first()
         val depositId = depositRow.id
 
-        // 5. HTTP POST to ${SUPABASE_URL}/functions/v1/create-deposit-order
+        // 4 & 5. HTTP POST to ${SUPABASE_URL}/functions/v1/create-deposit-order
         val jsonMediaType = "application/json; charset=utf-8".toMediaType()
         val bodyJson = JSONObject().apply {
             put("deposit_id", depositId)

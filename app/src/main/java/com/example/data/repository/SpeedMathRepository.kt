@@ -48,42 +48,30 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             val response = SupabaseClient.authApi.signIn(SupabaseAuthRequest(email, pass))
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
-                SupabaseClient.authToken = body.accessToken
+                val token = body.accessToken
                 val userId = body.user?.id ?: return@withContext null
+                val userEmail = body.user.email ?: email
+                val userDisplayName = body.user.userMetadata?.get("display_name")?.toString() ?: userEmail.substringBefore("@")
+
+                if (!token.isNullOrBlank()) {
+                    com.example.data.local.SessionManager.saveSession(
+                        accessToken = token,
+                        refreshToken = body.refreshToken,
+                        userId = userId,
+                        email = userEmail,
+                        displayName = userDisplayName
+                    )
+                }
+                SupabaseClient.authToken = token
                 SupabaseClient.currentUserId = userId
-                SupabaseClient.currentUserEmail = email
-                // Ensure public.users row exists for this user (handles legacy accounts)
-                ensureUserProfileExists(userId, email)
-                return@withContext fetchAndSyncUserProfile(userId, email)
+
+                // Ensure user profile row exists in public.users (auto-creates if missing)
+                return@withContext ensureUserProfileExists(userId, userEmail, userDisplayName)
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
         return@withContext null
-    }
-
-    private suspend fun ensureUserProfileExists(userId: String, email: String) {
-        try {
-            val res = SupabaseClient.restApi.getUsers(idFilter = "eq.$userId")
-            if (res.isSuccessful && res.body().isNullOrEmpty()) {
-                // Profile missing — auto-create for existing auth user
-                android.util.Log.d("AUTH", "Profile missing — auto-creating for $userId")
-                val newDto = SupabaseUserDto(
-                    id = userId,
-                    email = email,
-                    displayName = email.substringBefore("@"),
-                    status = "active",
-                    rank = "Bronze",
-                    mmr = 1000,
-                    xp = 0,
-                    walletBalance = 0.0,
-                    referralCode = "REF" + Random.nextInt(1000, 9999)
-                )
-                SupabaseClient.restApi.insertUser(user = newDto)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     suspend fun supabaseSignUp(email: String, pass: String, username: String, refCode: String?): UserEntity? = withContext(Dispatchers.IO) {
@@ -92,11 +80,46 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             val response = SupabaseClient.authApi.signUp(req)
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
-                SupabaseClient.authToken = body.accessToken
+                var token = body.accessToken
                 val userId = body.user?.id ?: return@withContext null
-                SupabaseClient.currentUserId = userId
-                SupabaseClient.currentUserEmail = email
 
+                // If accessToken wasn't returned directly on signup, sign in immediately
+                if (token.isNullOrBlank()) {
+                    val signInRes = SupabaseClient.authApi.signIn(SupabaseAuthRequest(email, pass))
+                    if (signInRes.isSuccessful && signInRes.body() != null) {
+                        token = signInRes.body()!!.accessToken
+                    }
+                }
+
+                if (!token.isNullOrBlank()) {
+                    com.example.data.local.SessionManager.saveSession(
+                        accessToken = token,
+                        refreshToken = body.refreshToken,
+                        userId = userId,
+                        email = email,
+                        displayName = username
+                    )
+                }
+                SupabaseClient.authToken = token
+                SupabaseClient.currentUserId = userId
+
+                // Check referral code if provided
+                var referrerId: String? = null
+                if (!refCode.isNullOrBlank()) {
+                    try {
+                        val refRes = SupabaseClient.restApi.getUsers(refCodeFilter = "eq.${refCode.trim().uppercase()}")
+                        val referrer = refRes.body()?.firstOrNull()
+                        if (referrer != null && referrer.id != userId) {
+                            referrerId = referrer.id
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.w("SIGNUP", "Referral lookup failed", e)
+                    }
+                }
+
+                val myRefCode = "REF" + (100000..999999).random()
+
+                // STEP 3: Insert row into public.users (CRITICAL!)
                 val newDto = SupabaseUserDto(
                     id = userId,
                     email = email,
@@ -106,16 +129,46 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                     mmr = 1000,
                     xp = 0,
                     walletBalance = 0.0,
-                    referralCode = "REF" + Random.nextInt(1000, 9999)
+                    lockedBalance = 0.0,
+                    matchesPlayed = 0,
+                    wins = 0,
+                    losses = 0,
+                    totalWinnings = 0.0,
+                    totalDeposited = 0.0,
+                    totalWithdrawn = 0.0,
+                    paidGameplayRestricted = false,
+                    verificationStatus = "unverified",
+                    referralCode = myRefCode
                 )
 
                 try {
-                    SupabaseClient.restApi.insertUser(user = newDto)
-                    android.util.Log.d("SIGNUP", "✅ Profile created in users table for $userId")
+                    val insertRes = SupabaseClient.restApi.insertUser(user = newDto)
+                    android.util.Log.d("SIGNUP", "✅ Profile row created in users table: code=${insertRes.code()}")
+
+                    if (referrerId != null) {
+                        try {
+                            SupabaseClient.restApi.updateUser(
+                                idQuery = "eq.$userId",
+                                updates = mapOf("referred_by" to referrerId)
+                            )
+                            SupabaseClient.restApi.insertReferral(
+                                mapOf(
+                                    "referrer_id" to referrerId,
+                                    "referred_id" to userId,
+                                    "referral_code" to (refCode?.trim()?.uppercase() ?: ""),
+                                    "reward_amount" to 50.0,
+                                    "reward_paid" to false,
+                                    "referred_name" to username
+                                )
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.w("SIGNUP", "Failed to insert referral row", e)
+                        }
+                    }
                 } catch (e: Exception) {
-                    android.util.Log.e("SIGNUP", "❌ Failed to insert users row", e)
-                    e.printStackTrace()
+                    android.util.Log.e("SIGNUP", "❌ Signup profile creation failed", e)
                 }
+
 
                 val entity = mapDtoToUserEntity(newDto)
                 dao.insertUser(entity)
@@ -127,6 +180,89 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         return@withContext null
     }
 
+    suspend fun ensureUserProfileExists(userId: String, email: String, displayName: String?): UserEntity? = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getUsers(idFilter = "eq.$userId")
+            if (res.isSuccessful && !res.body().isNullOrEmpty()) {
+                val dto = res.body()!!.first()
+                val entity = mapDtoToUserEntity(dto)
+                dao.insertUser(entity)
+                return@withContext entity
+            }
+
+            // Profile row is missing from public.users! Create it now
+            android.util.Log.d("AUTH", "Profile missing from public.users table — auto-creating for $userId")
+            val newDto = SupabaseUserDto(
+                id = userId,
+                email = email,
+                displayName = displayName ?: email.substringBefore("@"),
+                status = "active",
+                rank = "Bronze",
+                mmr = 1000,
+                xp = 0,
+                walletBalance = 0.0,
+                lockedBalance = 0.0,
+                matchesPlayed = 0,
+                wins = 0,
+                losses = 0,
+                totalWinnings = 0.0,
+                totalDeposited = 0.0,
+                totalWithdrawn = 0.0,
+                paidGameplayRestricted = false,
+                verificationStatus = "unverified",
+                referralCode = "REF" + Random.nextInt(1000, 9999)
+            )
+
+            try {
+                val insertRes = SupabaseClient.restApi.insertUser(user = newDto)
+                android.util.Log.d("AUTH", "Profile auto-create response: ${insertRes.code()}")
+                if (!insertRes.isSuccessful) {
+                    val basicUser = mapOf(
+                        "id" to userId,
+                        "email" to email,
+                        "display_name" to (displayName ?: email.substringBefore("@")),
+                        "status" to "active",
+                        "rank" to "Bronze",
+                        "mmr" to 1000,
+                        "xp" to 0,
+                        "wallet_balance" to 0.0
+                    )
+                    SupabaseClient.restApi.insertUserMap(
+                        prefer = "resolution=merge-duplicates,return=representation",
+                        user = basicUser
+                    )
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("AUTH", "Failed to auto-create profile with DTO, trying map fallback", e)
+                try {
+                    val basicUser = mapOf(
+                        "id" to userId,
+                        "email" to email,
+                        "display_name" to (displayName ?: email.substringBefore("@")),
+                        "status" to "active",
+                        "rank" to "Bronze",
+                        "mmr" to 1000,
+                        "xp" to 0,
+                        "wallet_balance" to 0.0
+                    )
+                    SupabaseClient.restApi.insertUserMap(
+                        prefer = "resolution=merge-duplicates,return=representation",
+                        user = basicUser
+                    )
+                } catch (e2: Exception) {
+                    android.util.Log.e("AUTH", "Map fallback also failed", e2)
+                }
+            }
+
+            val entity = mapDtoToUserEntity(newDto)
+            dao.insertUser(entity)
+            return@withContext entity
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext dao.getUserById(userId)
+    }
+
     suspend fun supabaseResetPassword(email: String): Boolean = withContext(Dispatchers.IO) {
         try {
             val res = SupabaseClient.authApi.resetPassword(mapOf("email" to email))
@@ -135,6 +271,36 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             return@withContext false
         }
     }
+
+    suspend fun updateLocalBalance(userId: String, newBalance: Double) = withContext(Dispatchers.IO) {
+        try {
+            val user = dao.getUserById(userId)
+            if (user != null) {
+                dao.insertUser(user.copy(walletBalance = newBalance))
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun updateUserProfile(userId: String, displayName: String, photoUrl: String? = null): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val updates = mutableMapOf<String, Any?>("display_name" to displayName)
+            if (photoUrl != null) updates["photo_url"] = photoUrl
+            val res = SupabaseClient.restApi.updateUser("eq.$userId", updates = updates)
+            if (res.isSuccessful && res.body() != null) {
+                res.body()!!.firstOrNull()?.let { dto ->
+                    dao.insertUser(mapDtoToUserEntity(dto))
+                }
+                return@withContext true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext false
+    }
+
+
 
     // -------------------------------------------------------------
     // Sync Real Data from Supabase
@@ -251,7 +417,7 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                 }
             }
 
-            // 9. Sync User Transactions
+            // 9. Sync User Transactions & Withdrawals
             if (currentUserId != null) {
                 val txRes = SupabaseClient.restApi.getTransactions("eq.$currentUserId")
                 if (txRes.isSuccessful && txRes.body() != null) {
@@ -267,6 +433,8 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                     }
                     txEntities.forEach { dao.insertTransaction(it) }
                 }
+
+                syncUserWithdrawals(currentUserId)
             }
 
             // 10. Sync Recent Chat Messages
@@ -424,13 +592,11 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         )
         dao.updateUser(updated)
 
-        // Post to Supabase REST (user_name is required by RLS policy)
-        val userName = user.displayName.ifBlank { user.email }
+        // Post to Supabase REST
         try {
             SupabaseClient.restApi.insertDepositRow(
                 deposit = mapOf(
                     "user_id" to userId,
-                    "user_name" to userName,
                     "amount" to amount,
                     "gateway" to "zapupi",
                     "status" to "PENDING"
@@ -459,7 +625,13 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         dao.insertNotification(notif)
     }
 
-    suspend fun withdrawMoney(userId: String, amount: Double, method: String, account: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun withdrawMoney(
+        userId: String,
+        amount: Double,
+        method: String,
+        account: String,
+        accountHolderName: String? = null
+    ): Boolean = withContext(Dispatchers.IO) {
         val user = dao.getUserById(userId) ?: return@withContext false
         if (user.walletBalance < amount) return@withContext false
 
@@ -473,7 +645,18 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         dao.updateUser(updated)
 
         try {
-            SupabaseClient.restApi.postWithdrawal(SupabaseWithdrawalDto(userId = userId, amount = amount, method = method))
+            val withdrawalDto = SupabaseWithdrawalDto(
+                userId = userId,
+                userName = user.displayName,
+                userEmail = user.email,
+                amount = amount,
+                method = method,
+                upiId = if (method.equals("UPI", ignoreCase = true)) account else null,
+                accountHolderName = accountHolderName ?: user.displayName,
+                reference = account,
+                status = "PENDING"
+            )
+            SupabaseClient.restApi.postWithdrawal(withdrawalDto)
             SupabaseClient.restApi.updateUser("eq.$userId", updates = mapOf(
                 "wallet_balance" to newBalance,
                 "total_withdrawn" to newWithdrawn
@@ -501,6 +684,75 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         dao.insertNotification(notif)
         return@withContext true
     }
+
+    suspend fun syncUserWithdrawals(userId: String) = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getWithdrawals("eq.$userId")
+            if (res.isSuccessful && res.body() != null) {
+                val list = res.body()!!
+                for (w in list) {
+                    val status = (w.status ?: "PENDING").uppercase()
+                    if (status == "APPROVED" || status == "COMPLETED" || status == "SUCCESS") {
+                        dao.updateAllWithdrawalStatus(userId, "APPROVED")
+                        val notifId = "withdrawn_approved_${w.id ?: userId}"
+                        val notif = NotificationEntity(
+                            id = notifId,
+                            title = "Withdrawal Approved! 🎉",
+                            message = "Your withdrawal of ₹${w.amount.toInt()} has been APPROVED and successfully sent.",
+                            category = "Wallet"
+                        )
+                        dao.insertNotification(notif)
+                    } else if (status == "REJECTED" || status == "FAILED") {
+                        dao.updateAllWithdrawalStatus(userId, "REJECTED")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun approveWithdrawal(userId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            dao.updateAllWithdrawalStatus(userId, "APPROVED")
+            try {
+                val res = SupabaseClient.restApi.getWithdrawals("eq.$userId")
+                if (res.isSuccessful && res.body() != null) {
+                    res.body()!!.firstOrNull()?.id?.let { wId ->
+                        SupabaseClient.restApi.updateWithdrawal("eq.$wId", mapOf("status" to "APPROVED"))
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            val notif = NotificationEntity(
+                id = UUID.randomUUID().toString(),
+                title = "Withdrawal Approved! 🎉",
+                message = "Your withdrawal has been APPROVED and successfully credited to your account.",
+                category = "Wallet"
+            )
+            dao.insertNotification(notif)
+            return@withContext true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext false
+        }
+    }
+
+    fun getUserWithdrawalsFlow(userId: String) = dao.getUserWithdrawalsFlow(userId)
+
+    suspend fun getUserReferrals(userId: String): List<SupabaseReferralDto> = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getReferrals("eq.$userId")
+            if (res.isSuccessful && res.body() != null) {
+                return@withContext res.body()!!
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return@withContext emptyList()
+    }
+
 
     suspend fun purchaseVipPass(userId: String, tier: String, price: Double, durationDays: Long): Boolean = withContext(Dispatchers.IO) {
         val user = dao.getUserById(userId) ?: return@withContext false
