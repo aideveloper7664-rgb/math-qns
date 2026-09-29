@@ -139,7 +139,9 @@ data class SupabaseWithdrawalDto(
     @Json(name = "upi_id") val upiId: String? = null,
     @Json(name = "account_holder_name") val accountHolderName: String? = null,
     @Json(name = "reference") val reference: String? = null,
-    @Json(name = "status") val status: String? = "PENDING"
+    @Json(name = "status") val status: String? = "PENDING",
+    @Json(name = "requested_at") val requestedAt: String? = null,
+    @Json(name = "processed_at") val processedAt: String? = null
 )
 
 @JsonClass(generateAdapter = true)

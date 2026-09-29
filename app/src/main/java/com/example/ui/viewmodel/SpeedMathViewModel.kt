@@ -14,6 +14,7 @@ import com.example.data.repository.SpeedMathRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 data class GameState(
@@ -53,6 +54,9 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     val paymentUrlEvent: SharedFlow<String> = _paymentUrlEvent.asSharedFlow()
 
     val currentUserId = MutableStateFlow<String?>(null)
+    val withdrawSubmitting = MutableStateFlow(false)
+    private var watcherJob: Job? = null
+    private val database = AppDatabase.getDatabase(application)
 
     val currentUser: StateFlow<UserEntity?> = currentUserId.flatMapLatest { id ->
         if (id == null) flowOf(null) else repository.getUserFlow(id)
@@ -373,24 +377,53 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         if (id == null) flowOf(emptyList()) else repository.getUserWithdrawalsFlow(id)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    fun startWithdrawalWatcher() {
+        watcherJob?.cancel()
+        val userId = currentUserId.value ?: return
+        watcherJob = viewModelScope.launch {
+            while (isActive) {
+                val changed = repository.syncUserWithdrawals(userId)
+                if (changed) {
+                    refreshUserData(userId)
+                }
+                val pendingCount = database.speedMathDao().getPendingWithdrawalsCount(userId)
+                if (pendingCount == 0) {
+                    break
+                }
+                delay(5000L)
+            }
+        }
+    }
+
     fun syncWithdrawals() {
         val userId = currentUserId.value ?: return
         viewModelScope.launch {
             repository.syncUserWithdrawals(userId)
             refreshUserData(userId)
             _toastEvent.emit(ToastEvent.Show("Withdrawal status refreshed."))
+            startWithdrawalWatcher()
         }
     }
 
-    fun withdraw(amount: Double, method: String, account: String, accountHolder: String = "") {
+    fun withdraw(
+        amount: Double,
+        method: String,
+        account: String,
+        accountHolder: String = "",
+        onResult: (Boolean, String) -> Unit = { _, _ -> }
+    ) {
         val userId = currentUserId.value ?: return
         viewModelScope.launch {
-            val success = repository.withdrawMoney(userId, amount, method, account, accountHolder)
-            if (success) {
-                _toastEvent.emit(ToastEvent.Show("Withdrawal of ₹${amount.toInt()} requested."))
-                refreshUserData(userId)
-            } else {
-                _toastEvent.emit(ToastEvent.Show("Withdrawal failed.", true))
+            withdrawSubmitting.value = true
+            val result = repository.withdrawMoney(userId, amount, method, account, accountHolder)
+            withdrawSubmitting.value = false
+
+            _toastEvent.emit(ToastEvent.Show(result.message, isError = !result.success))
+            onResult(result.success, result.message)
+
+            if (result.success) {
+                syncWithdrawals()
+                startWithdrawalWatcher()
             }
         }
     }

@@ -38,6 +38,11 @@ fun WalletScreen(
 ) {
     if (user == null) return
 
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        onRefreshWithdrawals()
+    }
+
+    val pendingWithdrawalsSum = transactions.filter { it.type.equals("withdrawal", ignoreCase = true) && it.status.equals("PENDING", ignoreCase = true) }.sumOf { it.amount }
     val recentWithdrawals = transactions.filter { it.type.equals("withdrawal", ignoreCase = true) }
     val latestWithdrawal = recentWithdrawals.firstOrNull()
 
@@ -82,6 +87,22 @@ fun WalletScreen(
                             fontWeight = FontWeight.Black,
                             color = TextPrimary
                         )
+                        if (pendingWithdrawalsSum > 0) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Surface(
+                                color = GoldAccent.copy(alpha = 0.15f),
+                                shape = CircleShape,
+                                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "⏳ Pending Withdrawal: ${fmtMoney(pendingWithdrawalsSum)}",
+                                    color = GoldAccent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
                         if (user.lockedBalance > 0) {
                             Spacer(modifier = Modifier.height(8.dp))
                             Surface(

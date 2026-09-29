@@ -59,10 +59,26 @@ class MainActivity : ComponentActivity() {
                 val selectedChatRoom by viewModel.selectedChatRoom.collectAsStateWithLifecycle()
                 val chatMessages by viewModel.currentChatMessages.collectAsStateWithLifecycle()
                 val gameState by viewModel.gameState.collectAsStateWithLifecycle()
+                val withdrawSubmitting by viewModel.withdrawSubmitting.collectAsStateWithLifecycle()
 
                 var currentRoute by remember { mutableStateOf("home") }
                 var activeCheckoutUrl by remember { mutableStateOf<String?>(null) }
                 var activeDepositId by remember { mutableStateOf<String?>(null) }
+
+                // App Lifecycle Observer for auto-syncing withdrawals on resume
+                val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                            viewModel.syncWithdrawals()
+                            viewModel.startWithdrawalWatcher()
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose {
+                        lifecycleOwner.lifecycle.removeObserver(observer)
+                    }
+                }
 
                 // Toast event handler
                 LaunchedEffect(Unit) {
@@ -226,8 +242,11 @@ class MainActivity : ComponentActivity() {
                                     "withdraw" -> WithdrawScreen(
                                         user = currentUser,
                                         withdrawals = userWithdrawals,
-                                        onWithdraw = { amt, method, acc, holder ->
-                                            viewModel.withdraw(amt, method, acc, holder)
+                                        submitting = withdrawSubmitting,
+                                        onWithdraw = { amt, method, acc, holder, onResult ->
+                                            viewModel.withdraw(amt, method, acc, holder) { success, _ ->
+                                                onResult(success)
+                                            }
                                         },
                                         onRefreshWithdrawals = { viewModel.syncWithdrawals() },
                                         onBack = { currentRoute = "wallet" }

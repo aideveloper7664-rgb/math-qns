@@ -1,13 +1,21 @@
 package com.example.data.repository
 
+import android.util.Log
 import com.example.data.local.SpeedMathDao
 import com.example.data.model.*
 import com.example.data.remote.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Locale
 import java.util.UUID
 import kotlin.random.Random
+
+data class WithdrawResult(
+    val success: Boolean,
+    val message: String
+)
 
 class SpeedMathRepository(private val dao: SpeedMathDao) {
 
@@ -631,74 +639,171 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         method: String,
         account: String,
         accountHolderName: String? = null
-    ): Boolean = withContext(Dispatchers.IO) {
-        val user = dao.getUserById(userId) ?: return@withContext false
-        if (user.walletBalance < amount) return@withContext false
+    ): WithdrawResult = withContext(Dispatchers.IO) {
+        // 1. Fetch latest profile from server first
+        fetchAndSyncUserProfile(userId, null)
+        val user = dao.getUserById(userId)
+            ?: return@withContext WithdrawResult(false, "User profile not found")
 
-        // DO NOT update users.wallet_balance directly on pending withdrawal request.
-        // Only insert the pending record into withdrawals table & transactions.
+        // 2. Compute pending withdrawals
+        var pendingSum = 0.0
+        try {
+            val res = SupabaseClient.restApi.getWithdrawals("eq.$userId")
+            if (res.isSuccessful && res.body() != null) {
+                pendingSum = res.body()!!
+                    .filter { (it.status ?: "PENDING").equals("PENDING", ignoreCase = true) }
+                    .sumOf { it.amount }
+            }
+        } catch (e: Exception) {
+            val localTxs = dao.getPendingWithdrawals(userId)
+            pendingSum = localTxs.sumOf { it.amount }
+        }
+
+        val available = (user.walletBalance - pendingSum).coerceAtLeast(0.0)
+
+        // 3. Validation
+        if (!method.equals("UPI", ignoreCase = true)) {
+            return@withContext WithdrawResult(false, "Only UPI withdrawal method is supported")
+        }
+        val upiId = account.trim()
+        if (upiId.isBlank() || !upiId.contains("@")) {
+            return@withContext WithdrawResult(false, "Please enter a valid UPI ID (e.g. user@paytm)")
+        }
+        if (amount < 50.0) {
+            return@withContext WithdrawResult(false, "Minimum withdrawal amount is ₹50")
+        }
+        if (amount > 25000.0) {
+            return@withContext WithdrawResult(false, "Maximum withdrawal amount is ₹25,000")
+        }
+        if (amount > available) {
+            return@withContext WithdrawResult(
+                false,
+                "Insufficient balance. Available: ₹${"%.2f".format(available)} (Pending: ₹${"%.2f".format(pendingSum)})"
+            )
+        }
+
+        // 4. POST to server. DO NOT write users.wallet_balance here!
         try {
             val withdrawalDto = SupabaseWithdrawalDto(
                 userId = userId,
                 userName = user.displayName,
                 userEmail = user.email,
                 amount = amount,
-                method = method,
-                upiId = if (method.equals("UPI", ignoreCase = true)) account else null,
+                method = "UPI",
+                upiId = upiId,
                 accountHolderName = accountHolderName ?: user.displayName,
-                reference = account,
+                reference = upiId,
                 status = "PENDING"
             )
-            SupabaseClient.restApi.postWithdrawal(withdrawalDto)
+
+            val res = SupabaseClient.restApi.postWithdrawal(withdrawal = withdrawalDto)
+            if (!res.isSuccessful || res.body() == null || res.body()!!.isEmpty()) {
+                val err = res.errorBody()?.string() ?: res.message()
+                Log.e("Withdraw", "Failed to submit withdrawal: code=${res.code()}, err=$err")
+                return@withContext WithdrawResult(false, "Failed to submit withdrawal request ($err)")
+            }
+
+            // 5. Take returned remote ID and insert local transaction
+            val remoteRow = res.body()!!.first()
+            val remoteId = remoteRow.id ?: UUID.randomUUID().toString()
+            val localId = "wd_$remoteId"
+
+            val tx = TransactionEntity(
+                id = localId,
+                userId = userId,
+                type = "withdrawal",
+                amount = amount,
+                status = "PENDING",
+                gatewayOrAccount = "UPI ($upiId)"
+            )
+            dao.insertTransaction(tx)
+
+            val notif = NotificationEntity(
+                id = "wd_notif_${remoteId}_submitted",
+                title = "Withdrawal Requested ⚡",
+                message = "₹${amount.toInt()} withdrawal to $upiId submitted for admin processing.",
+                category = "Wallet"
+            )
+            dao.insertNotification(notif)
+
+            // NOTE: Client app NEVER writes wallet_balance or total_withdrawn on withdrawal request.
+            // Only server-side admin approval deducts wallet_balance.
+
+            return@withContext WithdrawResult(true, "Withdrawal request submitted successfully!")
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("Withdraw", "Exception posting withdrawal", e)
+            return@withContext WithdrawResult(false, "Network error: ${e.message}")
         }
-
-        val tx = TransactionEntity(
-            id = UUID.randomUUID().toString(),
-            userId = userId,
-            type = "withdrawal",
-            amount = amount,
-            status = "PENDING",
-            gatewayOrAccount = "$method ($account)"
-        )
-        dao.insertTransaction(tx)
-
-        val notif = NotificationEntity(
-            id = UUID.randomUUID().toString(),
-            title = "Withdrawal Requested",
-            message = "₹${amount.toInt()} withdrawal via $method submitted for processing.",
-            category = "Wallet"
-        )
-        dao.insertNotification(notif)
-        return@withContext true
     }
 
-    suspend fun syncUserWithdrawals(userId: String) = withContext(Dispatchers.IO) {
+    suspend fun syncUserWithdrawals(userId: String): Boolean = withContext(Dispatchers.IO) {
+        var anyChanged = false
         try {
+            // Delete legacy local fake pending rows that don't start with wd_
+            dao.deleteLegacyPendingWithdrawals(userId)
+
             val res = SupabaseClient.restApi.getWithdrawals("eq.$userId")
-            if (res.isSuccessful && res.body() != null) {
-                val list = res.body()!!
-                for (w in list) {
-                    val status = (w.status ?: "PENDING").uppercase()
-                    if (status == "APPROVED" || status == "COMPLETED" || status == "SUCCESS") {
-                        dao.updateAllWithdrawalStatus(userId, "APPROVED")
-                        val notifId = "withdrawn_approved_${w.id ?: userId}"
+            if (!res.isSuccessful || res.body() == null) {
+                Log.e("Withdraw", "Sync failed: code=${res.code()}, err=${res.errorBody()?.string()}")
+                return@withContext false
+            }
+
+            val remoteList = res.body()!!
+            for (w in remoteList) {
+                val remoteId = w.id ?: continue
+                val localId = "wd_$remoteId"
+                val rawStatus = (w.status ?: "PENDING").uppercase()
+
+                val newStatus = when (rawStatus) {
+                    "APPROVED", "COMPLETED", "SUCCESS" -> "APPROVED"
+                    "REJECTED", "FAILED" -> "REJECTED"
+                    else -> "PENDING"
+                }
+
+                val existingTx = dao.getTransactionById(localId)
+                if (existingTx == null || !existingTx.status.equals(newStatus, ignoreCase = true)) {
+                    anyChanged = true
+
+                    if (existingTx != null && newStatus != "PENDING") {
+                        val notifTitle = if (newStatus == "APPROVED") "Withdrawal Approved! 🎉" else "Withdrawal Rejected ❌"
+                        val notifMsg = if (newStatus == "APPROVED") {
+                            "Your withdrawal of ₹${w.amount.toInt()} has been APPROVED and sent to your account."
+                        } else {
+                            "Your withdrawal request of ₹${w.amount.toInt()} was rejected."
+                        }
                         val notif = NotificationEntity(
-                            id = notifId,
-                            title = "Withdrawal Approved! 🎉",
-                            message = "Your withdrawal of ₹${w.amount.toInt()} has been APPROVED and successfully sent.",
+                            id = "wd_notif_${remoteId}_$newStatus",
+                            title = notifTitle,
+                            message = notifMsg,
                             category = "Wallet"
                         )
                         dao.insertNotification(notif)
-                    } else if (status == "REJECTED" || status == "FAILED") {
-                        dao.updateAllWithdrawalStatus(userId, "REJECTED")
                     }
                 }
+
+                val parsedTime = try {
+                    w.requestedAt?.let {
+                        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).parse(it)?.time
+                    } ?: System.currentTimeMillis()
+                } catch (e: Exception) {
+                    System.currentTimeMillis()
+                }
+
+                val tx = TransactionEntity(
+                    id = localId,
+                    userId = userId,
+                    type = "withdrawal",
+                    amount = w.amount,
+                    status = newStatus,
+                    gatewayOrAccount = "UPI (${w.upiId ?: w.reference ?: "UPI"})",
+                    createdAt = parsedTime
+                )
+                dao.insertTransaction(tx)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("Withdraw", "Exception syncing withdrawals", e)
         }
+        return@withContext anyChanged
     }
 
     fun getUserWithdrawalsFlow(userId: String) = dao.getUserWithdrawalsFlow(userId)

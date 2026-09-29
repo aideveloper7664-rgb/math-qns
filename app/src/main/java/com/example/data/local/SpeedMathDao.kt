@@ -46,6 +46,9 @@ interface SpeedMathDao {
     @Query("SELECT * FROM transactions WHERE userId = :userId ORDER BY createdAt DESC LIMIT 100")
     fun getUserTransactionsFlow(userId: String): Flow<List<TransactionEntity>>
 
+    @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
+    suspend fun getTransactionById(id: String): TransactionEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTransaction(transaction: TransactionEntity)
 
@@ -54,6 +57,15 @@ interface SpeedMathDao {
 
     @Query("UPDATE transactions SET status = :status WHERE userId = :userId AND type = 'withdrawal' AND status != :status")
     suspend fun updateAllWithdrawalStatus(userId: String, status: String)
+
+    @Query("DELETE FROM transactions WHERE userId = :userId AND type = 'withdrawal' AND status = 'PENDING' AND id NOT LIKE 'wd_%'")
+    suspend fun deleteLegacyPendingWithdrawals(userId: String)
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE userId = :userId AND type = 'withdrawal' AND status = 'PENDING'")
+    suspend fun getPendingWithdrawalsCount(userId: String): Int
+
+    @Query("SELECT * FROM transactions WHERE userId = :userId AND type = 'withdrawal' AND status = 'PENDING'")
+    suspend fun getPendingWithdrawals(userId: String): List<TransactionEntity>
 
     @Query("SELECT * FROM transactions WHERE userId = :userId AND type = 'withdrawal' ORDER BY createdAt DESC")
     fun getUserWithdrawalsFlow(userId: String): Flow<List<TransactionEntity>>

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.TransactionEntity
 import com.example.data.model.UserEntity
 import com.example.ui.components.*
 import com.example.ui.theme.*
@@ -24,8 +25,9 @@ import com.example.ui.theme.*
 @Composable
 fun WithdrawScreen(
     user: UserEntity?,
-    withdrawals: List<com.example.data.model.TransactionEntity> = emptyList(),
-    onWithdraw: (Double, String, String, String) -> Unit,
+    withdrawals: List<TransactionEntity> = emptyList(),
+    submitting: Boolean = false,
+    onWithdraw: (Double, String, String, String, (Boolean) -> Unit) -> Unit,
     onRefreshWithdrawals: () -> Unit = {},
     onBack: () -> Unit
 ) {
@@ -40,10 +42,20 @@ fun WithdrawScreen(
     var amountText by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
-    val balance = user.walletBalance
+    val walletBalance = user.walletBalance
+    val pendingSum = withdrawals.filter { it.status.equals("PENDING", ignoreCase = true) }.sumOf { it.amount }
+    val availableToWithdraw = (walletBalance - pendingSum).coerceAtLeast(0.0)
+
     val amt = amountText.toDoubleOrNull() ?: 0.0
-    val isOverBalance = amt > balance && amt > 0
+    val isOverAvailable = amt > availableToWithdraw && amt > 0
     val isUnderMin = amt > 0 && amt < minW
+
+    val canSubmit = !submitting &&
+            amt >= minW &&
+            amt <= availableToWithdraw &&
+            upiId.isNotBlank() &&
+            upiId.contains("@") &&
+            accountHolder.isNotBlank()
 
     Column(
         modifier = Modifier
@@ -58,29 +70,50 @@ fun WithdrawScreen(
         // ── Available Balance Card ──────────────────────────────────────────
         ArenaCard(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Available Balance", fontSize = 13.sp, color = TextMuted)
+                Text("Wallet Balance", fontSize = 12.sp, color = TextMuted)
                 Text(
-                    text = "₹${"%.2f".format(balance)}",
+                    text = "₹${"%.2f".format(walletBalance)}",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+            if (pendingSum > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Pending Withdrawals", fontSize = 12.sp, color = GoldAccent)
+                    Text(
+                        text = "- ₹${"%.2f".format(pendingSum)}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GoldAccent
+                    )
+                }
+            }
+            Divider(color = BorderSubtle, modifier = Modifier.padding(vertical = 6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Available to Withdraw", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(
+                    text = "₹${"%.2f".format(availableToWithdraw)}",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = GreenSuccess
                 )
             }
-            Divider(color = BorderSubtle, modifier = Modifier.padding(vertical = 6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Withdrawal Range", fontSize = 12.sp, color = TextMuted)
-                Text("₹50 - ₹25,000", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
         }
 
-        // ── Withdrawal Method Selector ──────────────────────────────────────
+        // ── Withdrawal Method Card ──────────────────────────────────────────
         ArenaCard(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
             Text("Payout Method: ⚡ UPI Transfer", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 
@@ -96,7 +129,7 @@ fun WithdrawScreen(
                 label = { Text("Amount (min ₹50, max ₹25,000)", color = TextMuted) },
                 prefix = { Text("₹", fontWeight = FontWeight.Bold, color = CyanPrimary) },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                isError = isOverBalance || isUnderMin,
+                isError = isOverAvailable || isUnderMin,
                 singleLine = true,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = CyanPrimary,
@@ -108,10 +141,10 @@ fun WithdrawScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (isOverBalance) {
+            if (isOverAvailable) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "❌ Insufficient balance (max ₹${"%.2f".format(balance)})",
+                    text = "❌ Insufficient balance (Available: ₹${"%.2f".format(availableToWithdraw)})",
                     color = RedError,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
@@ -140,7 +173,7 @@ fun WithdrawScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
-                                val calc = (user.walletBalance * pct / 100).toInt()
+                                val calc = (availableToWithdraw * pct / 100).toInt()
                                 amountText = calc.toString()
                                 errorMsg = null
                             }
@@ -159,25 +192,25 @@ fun WithdrawScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-                            // UPI ID input
-                OutlinedTextField(
-                    value = upiId,
-                    onValueChange = {
-                        upiId = it.trim()
-                        errorMsg = null
-                    },
-                    label = { Text("UPI ID (e.g. user@paytm / user@okaxis)", color = TextMuted) },
-                    placeholder = { Text("username@upi", color = TextMuted.copy(alpha = 0.5f)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = CyanPrimary,
-                        unfocusedBorderColor = BorderSubtle,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
+            // UPI ID input
+            OutlinedTextField(
+                value = upiId,
+                onValueChange = {
+                    upiId = it.trim()
+                    errorMsg = null
+                },
+                label = { Text("UPI ID (e.g. user@paytm / user@okaxis)", color = TextMuted) },
+                placeholder = { Text("username@upi", color = TextMuted.copy(alpha = 0.5f)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CyanPrimary,
+                    unfocusedBorderColor = BorderSubtle,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -230,7 +263,7 @@ fun WithdrawScreen(
                 Text("ℹ️", fontSize = 16.sp)
                 Spacer(Modifier.width(10.dp))
                 Text(
-                    text = "Withdrawal will be processed within 24 hours. Make sure your UPI ID is correct.",
+                    text = "Withdrawal will be processed within 24 hours. Your balance is deducted only after admin approval.",
                     fontSize = 11.sp,
                     color = TextMuted,
                     lineHeight = 15.sp
@@ -250,14 +283,17 @@ fun WithdrawScreen(
                     errorMsg = "Minimum withdrawal amount is ₹50."
                 } else if (amt > maxW) {
                     errorMsg = "Maximum withdrawal amount is ₹25,000."
-                } else if (amt > balance) {
-                    errorMsg = "Amount exceeds available balance (₹${"%.2f".format(balance)})."
+                } else if (amt > availableToWithdraw) {
+                    errorMsg = "Amount exceeds available balance (₹${"%.2f".format(availableToWithdraw)})."
                 } else {
-                    onWithdraw(amt, method, accountRef, accountHolder.trim())
-                    onBack()
+                    onWithdraw(amt, method, accountRef, accountHolder.trim()) { success ->
+                        if (success) {
+                            onBack()
+                        }
+                    }
                 }
             },
-            enabled = amt >= minW && amt <= balance && upiId.isNotBlank() && upiId.contains("@") && accountHolder.isNotBlank(),
+            enabled = canSubmit,
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = CyanPrimary,
@@ -268,7 +304,11 @@ fun WithdrawScreen(
                 .fillMaxWidth()
                 .height(54.dp)
         ) {
-            Text("SUBMIT WITHDRAWAL REQUEST", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            if (submitting) {
+                CircularProgressIndicator(modifier = Modifier.size(22.dp), color = BgDark, strokeWidth = 2.5.dp)
+            } else {
+                Text("SUBMIT WITHDRAWAL REQUEST", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         if (withdrawals.isNotEmpty()) {
@@ -295,15 +335,28 @@ fun WithdrawScreen(
                 )
             }
 
-            withdrawals.take(5).forEach { item ->
+            withdrawals.take(10).forEach { item ->
                 val isApproved = item.status.equals("APPROVED", ignoreCase = true) ||
                         item.status.equals("COMPLETED", ignoreCase = true) ||
                         item.status.equals("SUCCESS", ignoreCase = true)
+                val isRejected = item.status.equals("REJECTED", ignoreCase = true) ||
+                        item.status.equals("FAILED", ignoreCase = true)
+
+                val cardBg = when {
+                    isApproved -> GreenSuccess.copy(alpha = 0.08f)
+                    isRejected -> RedError.copy(alpha = 0.08f)
+                    else -> SurfaceDark
+                }
+                val borderClr = when {
+                    isApproved -> GreenSuccess.copy(alpha = 0.35f)
+                    isRejected -> RedError.copy(alpha = 0.35f)
+                    else -> BorderSubtle
+                }
 
                 Surface(
-                    color = if (isApproved) GreenSuccess.copy(alpha = 0.08f) else SurfaceDark,
+                    color = cardBg,
                     shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, if (isApproved) GreenSuccess.copy(alpha = 0.35f) else BorderSubtle),
+                    border = BorderStroke(1.dp, borderClr),
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
@@ -313,19 +366,17 @@ fun WithdrawScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "₹${item.amount.toInt()}",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Black,
-                                color = if (isApproved) GreenSuccess else TextPrimary
+                                text = "₹${"%.2f".format(item.amount)}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = TextPrimary
                             )
-                            StatusPill(status = if (isApproved) "APPROVED" else item.status)
+                            StatusPill(status = item.status)
                         }
-
                         Spacer(modifier = Modifier.height(4.dp))
-
                         Text(
-                            text = "Account: ${item.gatewayOrAccount}",
-                            fontSize = 12.sp,
+                            text = item.gatewayOrAccount,
+                            fontSize = 11.sp,
                             color = TextMuted
                         )
                     }

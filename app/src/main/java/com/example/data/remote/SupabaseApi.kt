@@ -146,14 +146,15 @@ interface SupabaseRestApi {
 
     @POST("rest/v1/withdrawals")
     suspend fun postWithdrawal(
+        @Header("Prefer") prefer: String = "return=representation",
         @Body withdrawal: SupabaseWithdrawalDto
-    ): Response<Unit>
+    ): Response<List<SupabaseWithdrawalDto>>
 
     @GET("rest/v1/withdrawals")
     suspend fun getWithdrawals(
         @Query("user_id") userQuery: String,
         @Query("select") select: String = "*",
-        @Query("order") order: String = "created_at.desc"
+        @Query("order") order: String = "requested_at.desc"
     ): Response<List<SupabaseWithdrawalDto>>
 
     @PATCH("rest/v1/withdrawals")
