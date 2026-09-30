@@ -147,15 +147,25 @@ class SinglePlayerGameRepository {
                     val reason = data["reason"]?.toString()
                     val prize = (data["prize"] as? Number)?.toDouble() ?: 0.0
                     val correctAnswer = data["correct_answer"]?.toString()
+                    val refund = (data["refund"] as? Number)?.toDouble() ?: 0.0
+                    val refundApplied = (data["refund_applied"] as? Boolean) ?: false
+                    val correctAnswers = (data["correct_answers"] as? Number)?.toInt() ?: 0
+                    val success = (data["success"] as? Boolean) ?: true
+                    val error = data["error"]?.toString()
 
                     val result = SubmitAnswerResponse(
+                        success = success,
                         correct = isCorrect,
                         correctAnswer = correctAnswer,
                         pointsEarned = points,
                         totalScore = total,
+                        correctAnswers = correctAnswers,
                         gameOver = isGameOver,
                         reason = reason,
-                        prize = prize
+                        prize = prize,
+                        refund = refund,
+                        refundApplied = refundApplied,
+                        error = error
                     )
                     return@withContext RpcResult.Ok(result)
                 } else {

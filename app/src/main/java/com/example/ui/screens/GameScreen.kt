@@ -18,26 +18,34 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.UserEntity
 import com.example.data.remote.GameResult
 import com.example.data.remote.QuestionData
 import com.example.ui.theme.*
+import com.example.ui.viewmodel.GameConfigUi
 import com.example.ui.viewmodel.GameState
 import java.util.Locale
 
 @Composable
 fun GameScreen(
     state: GameState,
+    config: GameConfigUi = GameConfigUi(),
+    user: UserEntity? = null,
     onAnswer: (String?) -> Unit,
     onPlayAgain: () -> Unit,
     onGoHome: () -> Unit,
+    onViewHistory: () -> Unit = {},
     onRetry: () -> Unit = {},
     onQuit: () -> Unit = {}
 ) {
     if (state.isGameOver && state.gameResult != null) {
         GameOverView(
             result = state.gameResult,
+            config = config,
+            user = user,
             onPlayAgain = onPlayAgain,
-            onHome = onGoHome
+            onHome = onGoHome,
+            onViewHistory = onViewHistory
         )
         return
     }
@@ -147,22 +155,40 @@ fun GameScreen(
                 }
             }
 
-            Surface(
-                color = SurfaceDark,
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, BorderSubtle)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (state.refundCredited && state.refundAmount > 0) {
+                    Surface(
+                        color = GreenSuccess.copy(alpha = 0.18f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, GreenSuccess.copy(alpha = 0.4f))
+                    ) {
+                        Text(
+                            text = "✅ Refund Credited",
+                            color = GreenSuccess,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+
+                Surface(
+                    color = SurfaceDark,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderSubtle)
                 ) {
-                    Text("Score: ", fontSize = 12.sp, color = TextMuted)
-                    Text(
-                        text = "${state.score}",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 15.sp,
-                        color = GoldAccent
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Score: ", fontSize = 12.sp, color = TextMuted)
+                        Text(
+                            text = "${state.score}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            color = GoldAccent
+                        )
+                    }
                 }
             }
         }
@@ -399,10 +425,24 @@ fun OptionCard(
 @Composable
 fun GameOverView(
     result: GameResult,
+    config: GameConfigUi,
+    user: UserEntity?,
     onPlayAgain: () -> Unit,
-    onHome: () -> Unit
+    onHome: () -> Unit,
+    onViewHistory: () -> Unit
 ) {
     val isWin = result.prize > 0
+    val title = if (isWin) config.winTitle else config.loseTitle
+    val rawMessage = if (isWin) config.winMessage else config.loseMessage
+    val currentBal = user?.walletBalance ?: 0.0
+
+    val formattedMessage = rawMessage
+        .replace("{score}", "${result.totalScore}")
+        .replace("{prize}", "₹${"%.2f".format(result.prize)}")
+        .replace("{correct}", "${result.correctAnswers}")
+        .replace("{total}", "${config.questionsPerGame}")
+        .replace("{balance}", "₹${"%.2f".format(currentBal)}")
+        .replace("{refund}", "₹${"%.2f".format(result.refund)}")
 
     Column(
         modifier = Modifier
@@ -425,11 +465,22 @@ fun GameOverView(
         Spacer(Modifier.height(16.dp))
 
         Text(
-            text = if (isWin) "GAME COMPLETE" else "GAME OVER",
-            fontSize = 26.sp,
+            text = title,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Black,
-            color = if (isWin) GreenSuccess else RedError
+            color = if (isWin) GreenSuccess else RedError,
+            textAlign = TextAlign.Center
         )
+
+        if (formattedMessage.isNotBlank()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = formattedMessage,
+                fontSize = 13.sp,
+                color = TextMuted,
+                textAlign = TextAlign.Center
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
 
@@ -440,24 +491,59 @@ fun GameOverView(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
-                StatRow("Questions Answered", "${result.questionsAnswered}")
-                Divider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp))
-                StatRow("Correct Answers", "${result.correctAnswers}")
-                Divider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp))
                 StatRow("Final Score", "${result.totalScore} pts")
-                Divider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Prize Won", color = TextMuted, fontSize = 14.sp)
-                    Text(
-                        text = "₹${"%.2f".format(result.prize)}",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 18.sp,
-                        color = if (result.prize > 0) GreenSuccess else TextPrimary
-                    )
+                HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp)
+                StatRow("Correct Answers", "${result.correctAnswers} / ${config.questionsPerGame}")
+
+                if (result.prize > 0) {
+                    HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Prize Won", color = TextMuted, fontSize = 14.sp)
+                        Text(
+                            text = "₹${"%.2f".format(result.prize)}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 18.sp,
+                            color = GreenSuccess
+                        )
+                    }
+                }
+
+                if (result.refund > 0) {
+                    HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Entry Fee Refunded", color = GoldAccent, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = "✅ ₹${"%.2f".format(result.refund)}",
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp,
+                            color = GoldAccent
+                        )
+                    }
+                }
+
+                if (result.prize > 0 || result.refund > 0) {
+                    HorizontalDivider(color = BorderSubtle, modifier = Modifier.padding(vertical = 8.dp), thickness = 0.5.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("New Wallet Balance", color = TextMuted, fontSize = 14.sp)
+                        Text(
+                            text = "₹${"%.2f".format(currentBal)}",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = CyanPrimary
+                        )
+                    }
                 }
 
                 if (result.reason != null) {
@@ -480,7 +566,7 @@ fun GameOverView(
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
 
         Button(
             onClick = onPlayAgain,
@@ -488,22 +574,38 @@ fun GameOverView(
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF36D399)),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
+                .height(52.dp)
         ) {
-            Text("▶ PLAY AGAIN", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+            Text("▶ PLAY AGAIN", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.Black)
         }
 
         Spacer(Modifier.height(10.dp))
 
-        OutlinedButton(
-            onClick = onHome,
-            shape = RoundedCornerShape(14.dp),
-            border = BorderStroke(1.dp, BorderSubtle),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text("HOME", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            OutlinedButton(
+                onClick = onViewHistory,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, CyanPrimary.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                Text("📜 HISTORY", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+            }
+
+            OutlinedButton(
+                onClick = onHome,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, BorderSubtle),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                Text("HOME", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            }
         }
     }
 }

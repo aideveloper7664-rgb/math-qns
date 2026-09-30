@@ -15,26 +15,54 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
+import com.example.data.remote.SupabaseVipPlanDto
 import com.example.ui.components.*
 import com.example.ui.theme.*
 
-data class VipPlan(val tier: String, val name: String, val price: Double, val days: Long, val perks: List<String>, val tag: String? = null)
+data class VipPlanDisplay(
+    val tier: String,
+    val name: String,
+    val price: Double,
+    val days: Long,
+    val perks: List<String>,
+    val tag: String? = null
+)
 
 val defaultVipPlans = listOf(
-    VipPlan("weekly", "Weekly Pass", 49.0, 7, listOf("Gold Crown Badge 👑", "VIP Chat Room Access", "2x XP Multiplier"), null),
-    VipPlan("monthly", "Monthly Pass", 149.0, 30, listOf("Gold Crown Badge 👑", "VIP Lounge & High Rollers Access", "3x XP Multiplier", "Exclusive Diamond Tournaments"), "POPULAR"),
-    VipPlan("yearly", "Yearly Pass", 999.0, 365, listOf("Gold Crown Badge 👑", "All VIP Rooms Unlocked", "5x XP Multiplier", "Zero Platform Fees on Duels"), "BEST VALUE")
+    VipPlanDisplay("weekly", "Weekly Pass", 49.0, 7, listOf("Gold Crown Badge 👑", "VIP Chat Room Access", "2x XP Multiplier"), null),
+    VipPlanDisplay("monthly", "Monthly Pass", 149.0, 30, listOf("Gold Crown Badge 👑", "VIP Lounge & High Rollers Access", "3x XP Multiplier", "Exclusive Diamond Tournaments"), "POPULAR"),
+    VipPlanDisplay("yearly", "Yearly Pass", 999.0, 365, listOf("Gold Crown Badge 👑", "All VIP Rooms Unlocked", "5x XP Multiplier", "Zero Platform Fees on Duels"), "BEST VALUE")
 )
 
 @Composable
 fun VipScreen(
     user: UserEntity?,
-    onPurchaseVip: (String, Double, Long) -> Unit,
+    plans: List<SupabaseVipPlanDto> = emptyList(),
+    isLoading: Boolean = false,
+    onPurchaseVip: (String) -> Unit,
     onBack: () -> Unit
 ) {
     if (user == null) return
 
     val isVipActive = user.vipTier != "none" && (user.vipExpiresAt == null || user.vipExpiresAt > System.currentTimeMillis())
+
+    val displayPlans: List<VipPlanDisplay> = if (plans.isNotEmpty()) {
+        plans.map { p ->
+            val days = (p.durationDays ?: (if (p.tier == "weekly") 7 else if (p.tier == "monthly") 30 else 365)).toLong()
+            val perks = p.benefitLines()
+            val tag = if (p.tier == "monthly") "POPULAR" else if (p.tier == "yearly") "BEST VALUE" else null
+            VipPlanDisplay(
+                tier = p.tier,
+                name = p.name,
+                price = p.price,
+                days = days,
+                perks = if (perks.isNotEmpty()) perks else listOf("Gold Crown Badge 👑", "VIP Access"),
+                tag = tag
+            )
+        }
+    } else {
+        defaultVipPlans
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -48,7 +76,7 @@ fun VipScreen(
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = SurfaceCard,
-                border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f)),
+                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.5f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
@@ -73,14 +101,14 @@ fun VipScreen(
             }
         }
 
-        items(defaultVipPlans) { plan ->
-            val isActiveTier = isVipActive && user.vipTier == plan.tier
+        items(displayPlans) { plan ->
+            val isActiveTier = isVipActive && user.vipTier.equals(plan.tier, ignoreCase = true)
 
             ArenaCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 14.dp),
-                border = if (plan.tag != null) androidx.compose.foundation.BorderStroke(1.5.dp, GoldAccent) else androidx.compose.foundation.BorderStroke(1.dp, BorderSubtle)
+                border = if (plan.tag != null) BorderStroke(1.5.dp, GoldAccent) else BorderStroke(1.dp, BorderSubtle)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -120,8 +148,8 @@ fun VipScreen(
 
                 ArenaButton(
                     text = if (isActiveTier) "✓ Currently Active" else "Buy ${plan.name} (₹${plan.price.toInt()})",
-                    onClick = { onPurchaseVip(plan.tier, plan.price, plan.days) },
-                    enabled = !isActiveTier,
+                    onClick = { onPurchaseVip(plan.tier) },
+                    enabled = !isActiveTier && !isLoading,
                     modifier = Modifier.fillMaxWidth()
                 )
             }

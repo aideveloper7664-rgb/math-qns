@@ -7,9 +7,14 @@ import com.example.data.remote.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 data class WithdrawResult(
@@ -822,44 +827,220 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
     }
 
 
-    suspend fun purchaseVipPass(userId: String, tier: String, price: Double, durationDays: Long): Boolean = withContext(Dispatchers.IO) {
-        val user = dao.getUserById(userId) ?: return@withContext false
-        if (user.walletBalance < price) return@withContext false
+    suspend fun fetchGameConfig(): RpcResult<List<GameConfigRow>> = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getGameConfig()
+            if (res.isSuccessful && res.body() != null) {
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("GameConfig", "fetchGameConfig code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load game config (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("GameConfig", "fetchGameConfig error", e)
+            RpcResult.Err(e.message ?: "Failed to load game config")
+        }
+    }
 
-        val now = System.currentTimeMillis()
-        val expires = now + (durationDays * 24 * 60 * 60 * 1000L)
-        val newBalance = user.walletBalance - price
+    suspend fun fetchGameHistory(userId: String): RpcResult<List<GameHistoryItem>> = withContext(Dispatchers.IO) {
+        try {
+            val userFilter = if (userId.startsWith("eq.")) userId else "eq.$userId"
+            val res = SupabaseClient.restApi.getGameHistory(userId = userFilter)
+            if (res.isSuccessful && res.body() != null) {
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("GameHistory", "fetchGameHistory code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load game history (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("GameHistory", "fetchGameHistory error", e)
+            RpcResult.Err(e.message ?: "Failed to load game history")
+        }
+    }
 
-        val updated = user.copy(
-            walletBalance = newBalance,
-            vipTier = tier,
-            vipExpiresAt = expires,
-            hasGoldCrown = true
-        )
-        dao.updateUser(updated)
+    suspend fun purchaseVip(tier: String): RpcResult<PurchaseVipResponse> = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.purchaseVipPassRpc(mapOf("p_tier" to tier))
+            if (res.isSuccessful && res.body() != null) {
+                val body = res.body()!!
+                if (body.success) {
+                    RpcResult.Ok(body)
+                } else {
+                    RpcResult.Err(body.error ?: "Failed to purchase VIP pass", res.code())
+                }
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("VipPass", "purchaseVip code=${res.code()} body=$eb")
+                var errorMsg: String? = null
+                try {
+                    if (eb.isNotBlank()) {
+                        val json = JSONObject(eb)
+                        if (json.has("error")) errorMsg = json.getString("error")
+                        else if (json.has("message")) errorMsg = json.getString("message")
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
+                RpcResult.Err(errorMsg ?: "Purchase failed (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("VipPass", "purchaseVip error", e)
+            RpcResult.Err(e.message ?: "Failed to purchase VIP pass")
+        }
+    }
+
+    suspend fun fetchLiveTournaments(nowIsoUtc: String? = null): RpcResult<List<TournamentLiveDto>> = withContext(Dispatchers.IO) {
+        try {
+            val nowStr = nowIsoUtc ?: SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.format(java.util.Date())
+            val orFilter = "(end_time.is.null,end_time.gte.$nowStr)"
+            val res = SupabaseClient.restApi.getLiveTournaments(or = orFilter)
+            if (res.isSuccessful && res.body() != null) {
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("Tournaments", "fetchLiveTournaments code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load tournaments (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Tournaments", "fetchLiveTournaments error", e)
+            RpcResult.Err(e.message ?: "Failed to load tournaments")
+        }
+    }
+
+    suspend fun fetchKnockoutMatchups(tournamentId: String): RpcResult<List<KnockoutMatchupDto>> = withContext(Dispatchers.IO) {
+        try {
+            val idFilter = if (tournamentId.startsWith("eq.")) tournamentId else "eq.$tournamentId"
+            val res = SupabaseClient.restApi.getKnockoutMatchups(tournamentId = idFilter)
+            if (res.isSuccessful && res.body() != null) {
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("Knockout", "fetchKnockoutMatchups code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load bracket matchups (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Knockout", "fetchKnockoutMatchups error", e)
+            RpcResult.Err(e.message ?: "Failed to load bracket matchups")
+        }
+    }
+
+    suspend fun fetchKnockoutParticipants(tournamentId: String): RpcResult<List<KnockoutParticipantDto>> = withContext(Dispatchers.IO) {
+        try {
+            val idFilter = if (tournamentId.startsWith("eq.")) tournamentId else "eq.$tournamentId"
+            val res = SupabaseClient.restApi.getKnockoutParticipants(tournamentId = idFilter)
+            if (res.isSuccessful && res.body() != null) {
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("Knockout", "fetchKnockoutParticipants code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load participants (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Knockout", "fetchKnockoutParticipants error", e)
+            RpcResult.Err(e.message ?: "Failed to load participants")
+        }
+    }
+
+    suspend fun fetchVipPlans(): RpcResult<List<SupabaseVipPlanDto>> = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getVipPlans()
+            if (res.isSuccessful && res.body() != null) {
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("VipPlans", "fetchVipPlans code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load VIP plans (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("VipPlans", "fetchVipPlans error", e)
+            RpcResult.Err(e.message ?: "Failed to load VIP plans")
+        }
+    }
+
+    suspend fun uploadProfilePhoto(base64: String): RpcResult<String> = withContext(Dispatchers.IO) {
+        val userId = SupabaseClient.currentUserId 
+            ?: com.example.data.local.SessionManager.userId 
+            ?: return@withContext RpcResult.Err("Please sign in first")
+        val token = SupabaseClient.authToken 
+            ?: com.example.data.local.SessionManager.authToken 
+            ?: return@withContext RpcResult.Err("Session expired. Please sign in again")
 
         try {
-            SupabaseClient.restApi.updateUser("eq.$userId", updates = mapOf(
-                "wallet_balance" to newBalance,
-                "vip_tier" to tier,
-                "has_gold_crown" to true
-            ))
+            val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+            val bodyJson = JSONObject().apply {
+                put("image_base64", base64)
+            }.toString()
+
+            val request = Request.Builder()
+                .url("${SupabaseClient.BASE_URL}functions/v1/upload-profile-photo")
+                .addHeader("Authorization", "Bearer $token")
+                .addHeader("apikey", SupabaseClient.ANON_KEY)
+                .addHeader("Content-Type", "application/json")
+                .post(bodyJson.toRequestBody(jsonMediaType))
+                .build()
+
+            val client = SupabaseClient.okHttpClient.newBuilder()
+                .readTimeout(60, TimeUnit.SECONDS)
+                .build()
+
+            val response = client.newCall(request).execute()
+            val responseStr = response.body?.string() ?: ""
+
+            if (!response.isSuccessful) {
+                var errorMsg: String? = null
+                try {
+                    if (responseStr.isNotBlank()) {
+                        val json = JSONObject(responseStr)
+                        if (json.has("error")) {
+                            errorMsg = json.getString("error")
+                        }
+                    }
+                } catch (e: Exception) {
+                    // ignore
+                }
+                Log.e("UploadPhoto", "Upload failed: code=${response.code} body=$responseStr")
+                return@withContext RpcResult.Err(errorMsg ?: "Photo upload failed (${response.code})", response.code)
+            }
+
+            val json = JSONObject(responseStr)
+            val success = json.optBoolean("success", false)
+            val url = json.optString("url", "")
+            val error = json.optString("error", "")
+
+            if (success && url.isNotBlank()) {
+                val user = dao.getUserById(userId)
+                if (user != null) {
+                    dao.insertUser(user.copy(photoUrl = url))
+                }
+                fetchAndSyncUserProfile(userId, null)
+                return@withContext RpcResult.Ok(url)
+            } else {
+                return@withContext RpcResult.Err(if (error.isNotBlank()) error else "Upload failed", response.code)
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("UploadPhoto", "Upload exception: ${e.message}", e)
+            return@withContext RpcResult.Err(e.message ?: "Failed to upload photo")
         }
-
-        val tx = TransactionEntity(
-            id = UUID.randomUUID().toString(),
-            userId = userId,
-            type = "vip_purchase",
-            amount = price,
-            status = "COMPLETED",
-            gatewayOrAccount = "VIP Pass $tier"
-        )
-        dao.insertTransaction(tx)
-
-        dao.unlockBadge("vip_master")
-        return@withContext true
     }
 
     suspend fun recordMatchResults(

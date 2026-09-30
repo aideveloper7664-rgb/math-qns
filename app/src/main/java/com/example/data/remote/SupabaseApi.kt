@@ -235,5 +235,43 @@ interface SupabaseRestApi {
     suspend fun getLeaderboardRpc(
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<LeaderboardResponse>
+
+    @GET("rest/v1/game_config")
+    suspend fun getGameConfig(
+        @Query("select") select: String = "key,value",
+        @Query("key") key: String = "in.(popup_settings,game_rewards,wallet_config)"
+    ): Response<List<GameConfigRow>>
+
+    @GET("rest/v1/v_game_history")
+    suspend fun getGameHistory(
+        @Query("select") select: String = "*",
+        @Query("user_id") userId: String,
+        @Query("order") order: String = "started_at.desc",
+        @Query("limit") limit: Int = 50
+    ): Response<List<GameHistoryItem>>
+
+    @POST("rest/v1/rpc/purchase_vip_pass")
+    suspend fun purchaseVipPassRpc(@Body body: Map<String, @JvmSuppressWildcards Any>): Response<PurchaseVipResponse>
+
+    @GET("rest/v1/tournaments")
+    suspend fun getLiveTournaments(
+        @Query("select") select: String = "*",
+        @Query("status") status: String = "in.(UPCOMING,LIVE)",
+        @Query("or") or: String,
+        @Query("order") order: String = "start_time.asc"
+    ): Response<List<TournamentLiveDto>>
+
+    @GET("rest/v1/knockout_matchups")
+    suspend fun getKnockoutMatchups(
+        @Query("select") select: String = "*",
+        @Query("tournament_id") tournamentId: String,
+        @Query("order") order: String = "round_number.asc,matchup_number.asc"
+    ): Response<List<KnockoutMatchupDto>>
+
+    @GET("rest/v1/knockout_participants")
+    suspend fun getKnockoutParticipants(
+        @Query("select") select: String = "user_id,user_name,seed,status",
+        @Query("tournament_id") tournamentId: String
+    ): Response<List<KnockoutParticipantDto>>
 }
 

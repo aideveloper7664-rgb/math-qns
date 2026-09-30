@@ -36,7 +36,28 @@ data class GameState(
     val gameResult: GameResult? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val errorRetryable: Boolean = true
+    val errorRetryable: Boolean = true,
+    val refundCredited: Boolean = false,
+    val refundAmount: Double = 0.0
+)
+
+data class GameConfigUi(
+    val entryFee: Double = 10.0,
+    val showPlayConfirm: Boolean = true,
+    val playTitle: String = "Start Game?",
+    val playMessage: String = "{entry_fee} will be deducted from your wallet to start the game.",
+    val showResultPopup: Boolean = true,
+    val winTitle: String = "🎉 You Won!",
+    val winMessage: String = "",
+    val loseTitle: String = "Game Over",
+    val loseMessage: String = "Better luck next time!",
+    val questionsPerGame: Int = 12
+)
+
+data class HistoryUiState(
+    val items: List<GameHistoryItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null
 )
 
 data class LeaderboardUiState(
@@ -84,6 +105,32 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     val leaderboardState: StateFlow<LeaderboardUiState> = _leaderboardState.asStateFlow()
     private var leaderboardAutoJob: Job? = null
     private var leaderboardLoadJob: Job? = null
+
+    private val _gameConfig = MutableStateFlow(GameConfigUi())
+    val gameConfig: StateFlow<GameConfigUi> = _gameConfig.asStateFlow()
+
+    private val _showPlayConfirm = MutableStateFlow(false)
+    val showPlayConfirm: StateFlow<Boolean> = _showPlayConfirm.asStateFlow()
+
+    private val _gameHistory = MutableStateFlow(HistoryUiState())
+    val gameHistory: StateFlow<HistoryUiState> = _gameHistory.asStateFlow()
+
+    val photoUploading = MutableStateFlow(false)
+
+    private val _vipPlans = MutableStateFlow<List<SupabaseVipPlanDto>>(emptyList())
+    val vipPlans: StateFlow<List<SupabaseVipPlanDto>> = _vipPlans.asStateFlow()
+    val vipLoading = MutableStateFlow(false)
+
+    private val _liveTournaments = MutableStateFlow<List<TournamentLiveDto>>(emptyList())
+    val liveTournaments: StateFlow<List<TournamentLiveDto>> = _liveTournaments.asStateFlow()
+    val tournamentsLoading = MutableStateFlow(false)
+    private var tournamentsAutoJob: Job? = null
+
+    val knockoutMatchups = MutableStateFlow<List<KnockoutMatchupDto>>(emptyList())
+    val knockoutParticipants = MutableStateFlow<List<KnockoutParticipantDto>>(emptyList())
+    val knockoutLoading = MutableStateFlow(false)
+
+    private var refundToastShownForSession = false
 
     fun setLeaderboardMetric(metric: String) {
         if (metric == _leaderboardState.value.metric) return
@@ -167,6 +214,56 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             refreshUserData(sessionUserId)
             refreshRecentSessions(sessionUserId)
         }
+        loadGameConfig()
+        loadVipPlans()
+    }
+
+    fun loadGameConfig() {
+        viewModelScope.launch {
+            when (val r = repository.fetchGameConfig()) {
+                is RpcResult.Ok -> {
+                    var current = _gameConfig.value
+                    for (row in r.value) {
+                        val map = row.value ?: continue
+                        when (row.key) {
+                            "popup_settings" -> {
+                                val showConfirm = (map["show_play_confirmation"] as? Boolean) ?: current.showPlayConfirm
+                                val playT = (map["play_confirm_title"] as? String) ?: current.playTitle
+                                val playM = (map["play_confirm_message"] as? String) ?: current.playMessage
+                                val showRes = (map["show_result_popup"] as? Boolean) ?: current.showResultPopup
+                                val winT = (map["result_title_win"] as? String) ?: current.winTitle
+                                val winM = (map["result_message_win"] as? String) ?: current.winMessage
+                                val loseT = (map["result_title_lose"] as? String) ?: current.loseTitle
+                                val loseM = (map["result_message_lose"] as? String) ?: current.loseMessage
+
+                                current = current.copy(
+                                    showPlayConfirm = showConfirm,
+                                    playTitle = playT,
+                                    playMessage = playM,
+                                    showResultPopup = showRes,
+                                    winTitle = winT,
+                                    winMessage = winM,
+                                    loseTitle = loseT,
+                                    loseMessage = loseM
+                                )
+                            }
+                            "game_rewards" -> {
+                                val fee = (map["entry_fee"] as? Number)?.toDouble() ?: current.entryFee
+                                val qCount = (map["questions_per_game"] as? Number)?.toInt() ?: current.questionsPerGame
+                                current = current.copy(
+                                    entryFee = fee,
+                                    questionsPerGame = qCount
+                                )
+                            }
+                        }
+                    }
+                    _gameConfig.value = current
+                }
+                is RpcResult.Err -> {
+                    // Keep defaults
+                }
+            }
+        }
     }
 
     private fun refreshUserData(userId: String) {
@@ -194,6 +291,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             if (user != null) {
                 currentUserId.value = user.id
                 refreshUserData(user.id)
+                loadGameConfig()
                 _toastEvent.emit(ToastEvent.Show("Welcome back, ${user.displayName}!"))
             } else {
                 _toastEvent.emit(ToastEvent.Show("Authentication failed. Check your connection or credentials.", true))
@@ -207,6 +305,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             if (user != null) {
                 currentUserId.value = user.id
                 refreshUserData(user.id)
+                loadGameConfig()
                 _toastEvent.emit(ToastEvent.Show("Account created! Welcome, ${user.displayName}."))
             } else {
                 _toastEvent.emit(ToastEvent.Show("Registration failed. Please try again.", true))
@@ -228,6 +327,25 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun uploadProfilePhoto(base64: String) {
+        val uid = currentUserId.value ?: return
+        viewModelScope.launch {
+            photoUploading.value = true
+            when (val r = repository.uploadProfilePhoto(base64)) {
+                is RpcResult.Ok -> {
+                    photoUploading.value = false
+                    _toastEvent.emit(ToastEvent.Show("Photo updated"))
+                    refreshUserData(uid)
+                    loadLeaderboard()
+                }
+                is RpcResult.Err -> {
+                    photoUploading.value = false
+                    _toastEvent.emit(ToastEvent.Show(r.message, true))
+                }
+            }
+        }
+    }
+
     init {
         viewModelScope.launch {
             SupabaseClient.sessionExpired.collect { expired ->
@@ -242,6 +360,42 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
 
     // ─── SINGLE-PLAYER PROGRESSIVE GAME ACTIONS ───────────────────────────────
 
+    fun requestPlay() {
+        val user = currentUser.value
+        if (user == null) {
+            viewModelScope.launch {
+                _toastEvent.emit(ToastEvent.Show("Please login first to play.", true))
+            }
+            return
+        }
+
+        val fee = _gameConfig.value.entryFee
+        if (user.walletBalance < fee) {
+            val feeFormatted = if (fee % 1.0 == 0.0) "₹${fee.toInt()}" else "₹${"%.2f".format(fee)}"
+            viewModelScope.launch {
+                _toastEvent.emit(ToastEvent.Show("Minimum $feeFormatted balance required to play. Please Add Money.", true))
+            }
+            return
+        }
+
+        loadGameConfig()
+
+        if (_gameConfig.value.showPlayConfirm) {
+            _showPlayConfirm.value = true
+        } else {
+            startGame()
+        }
+    }
+
+    fun dismissPlayConfirm() {
+        _showPlayConfirm.value = false
+    }
+
+    fun confirmPlay() {
+        _showPlayConfirm.value = false
+        startGame()
+    }
+
     fun startGame() {
         val user = currentUser.value
         if (user == null) {
@@ -251,14 +405,17 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
 
-        if (user.walletBalance < 10.0) {
+        val requiredFee = _gameConfig.value.entryFee
+        if (user.walletBalance < requiredFee) {
+            val feeFormatted = if (requiredFee % 1.0 == 0.0) "₹${requiredFee.toInt()}" else "₹${"%.2f".format(requiredFee)}"
             viewModelScope.launch {
-                _toastEvent.emit(ToastEvent.Show("Minimum ₹10 balance required to play. Please Add Money.", true))
+                _toastEvent.emit(ToastEvent.Show("Minimum $feeFormatted balance required to play. Please Add Money.", true))
             }
             return
         }
 
-        _gameState.value = GameState(isLoading = true, active = true)
+        refundToastShownForSession = false
+        _gameState.value = GameState(isLoading = true, active = true, entryFee = requiredFee)
 
         viewModelScope.launch {
             when (val res = singlePlayerRepo.startGame()) {
@@ -402,6 +559,13 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                     val newCorrect = if (isCorrect) state.correctAnswers + 1 else state.correctAnswers
                     val newAnswered = state.questionsAnswered + 1
 
+                    // F7: Entry fee refund display & immediate refresh
+                    if (submitResp.refundApplied && submitResp.refund > 0 && !refundToastShownForSession) {
+                        refundToastShownForSession = true
+                        _toastEvent.emit(ToastEvent.Show("🎉 Entry Fee Refunded: ₹${"%.2f".format(submitResp.refund)}"))
+                        currentUserId.value?.let { refreshUserData(it) }
+                    }
+
                     if (!gameOver) {
                         _gameState.value = _gameState.value.copy(
                             isLoading = false,
@@ -412,7 +576,9 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                             lastPointsEarned = submitResp.pointsEarned,
                             score = newScore,
                             correctAnswers = newCorrect,
-                            questionsAnswered = newAnswered
+                            questionsAnswered = newAnswered,
+                            refundCredited = submitResp.refundApplied,
+                            refundAmount = submitResp.refund
                         )
 
                         delay(600)
@@ -425,7 +591,9 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                             lastIsCorrect = false,
                             lastCorrectAnswer = submitResp.correctAnswer ?: question.correctAnswer,
                             lastPointsEarned = 0,
-                            questionsAnswered = newAnswered
+                            questionsAnswered = newAnswered,
+                            refundCredited = submitResp.refundApplied,
+                            refundAmount = submitResp.refund
                         )
 
                         delay(800)
@@ -435,19 +603,27 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                             correctAnswers = newCorrect,
                             questionsAnswered = newAnswered,
                             prize = submitResp.prize,
-                            reason = submitResp.reason ?: if (answer == null) "Time Out" else "Wrong Answer"
-                        )
-
-                        _gameState.value = _gameState.value.copy(
-                            active = false,
-                            isGameOver = true,
-                            gameResult = result,
-                            score = submitResp.totalScore
+                            reason = submitResp.reason ?: if (answer == null) "Time Out" else "Wrong Answer",
+                            refund = submitResp.refund,
+                            refundApplied = submitResp.refundApplied
                         )
 
                         currentUserId.value?.let { uid ->
                             refreshUserData(uid)
                             loadLeaderboard()
+                        }
+
+                        // F2: If showResultPopup is false, skip popup, show toast and return home
+                        if (!_gameConfig.value.showResultPopup) {
+                            _toastEvent.emit(ToastEvent.Show("Game over. Score ${submitResp.totalScore}"))
+                            quitGame()
+                        } else {
+                            _gameState.value = _gameState.value.copy(
+                                active = false,
+                                isGameOver = true,
+                                gameResult = result,
+                                score = submitResp.totalScore
+                            )
                         }
                     }
                 }
@@ -472,6 +648,104 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
         _gameState.value = GameState()
+    }
+
+    fun loadGameHistory() {
+        val uid = currentUserId.value ?: return
+        viewModelScope.launch {
+            _gameHistory.value = _gameHistory.value.copy(isLoading = true, error = null)
+            when (val r = repository.fetchGameHistory(uid)) {
+                is RpcResult.Ok -> {
+                    _gameHistory.value = HistoryUiState(items = r.value, isLoading = false, error = null)
+                }
+                is RpcResult.Err -> {
+                    _gameHistory.value = _gameHistory.value.copy(isLoading = false, error = r.message)
+                }
+            }
+        }
+    }
+
+    fun loadVipPlans() {
+        viewModelScope.launch {
+            vipLoading.value = true
+            when (val r = repository.fetchVipPlans()) {
+                is RpcResult.Ok -> {
+                    _vipPlans.value = r.value.filter { it.enabled != false }
+                    vipLoading.value = false
+                }
+                is RpcResult.Err -> {
+                    vipLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun purchaseVip(tier: String) {
+        val uid = currentUserId.value ?: return
+        viewModelScope.launch {
+            vipLoading.value = true
+            when (val r = repository.purchaseVip(tier)) {
+                is RpcResult.Ok -> {
+                    vipLoading.value = false
+                    refreshUserData(uid)
+                    val dateStr = r.value.expiresAt ?: ""
+                    _toastEvent.emit(ToastEvent.Show("VIP activated${if (dateStr.isNotBlank()) " until $dateStr" else "!"}"))
+                }
+                is RpcResult.Err -> {
+                    vipLoading.value = false
+                    _toastEvent.emit(ToastEvent.Show(r.message, true))
+                }
+            }
+        }
+    }
+
+    fun loadLiveTournaments() {
+        viewModelScope.launch {
+            tournamentsLoading.value = true
+            when (val r = repository.fetchLiveTournaments()) {
+                is RpcResult.Ok -> {
+                    _liveTournaments.value = r.value
+                    tournamentsLoading.value = false
+                }
+                is RpcResult.Err -> {
+                    tournamentsLoading.value = false
+                }
+            }
+        }
+    }
+
+    fun startTournamentsAutoRefresh() {
+        tournamentsAutoJob?.cancel()
+        tournamentsAutoJob = viewModelScope.launch {
+            while (isActive) {
+                loadLiveTournaments()
+                delay(60_000L)
+            }
+        }
+    }
+
+    fun stopTournamentsAutoRefresh() {
+        tournamentsAutoJob?.cancel()
+        tournamentsAutoJob = null
+    }
+
+    fun loadKnockoutBracket(tournamentId: String) {
+        viewModelScope.launch {
+            knockoutLoading.value = true
+            knockoutMatchups.value = emptyList()
+            knockoutParticipants.value = emptyList()
+
+            val mRes = repository.fetchKnockoutMatchups(tournamentId)
+            val pRes = repository.fetchKnockoutParticipants(tournamentId)
+
+            if (mRes is RpcResult.Ok) {
+                knockoutMatchups.value = mRes.value
+            }
+            if (pRes is RpcResult.Ok) {
+                knockoutParticipants.value = pRes.value
+            }
+            knockoutLoading.value = false
+        }
     }
 
     fun refreshUserWallet() {
@@ -552,19 +826,6 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             if (result.success) {
                 syncWithdrawals()
                 startWithdrawalWatcher()
-            }
-        }
-    }
-
-    fun purchaseVip(tier: String, price: Double, days: Long) {
-        val userId = currentUserId.value ?: return
-        viewModelScope.launch {
-            val success = repository.purchaseVipPass(userId, tier, price, days)
-            if (success) {
-                _toastEvent.emit(ToastEvent.Show("VIP Pass activated!"))
-                refreshUserData(userId)
-            } else {
-                _toastEvent.emit(ToastEvent.Show("Purchase failed. Insufficient balance.", true))
             }
         }
     }

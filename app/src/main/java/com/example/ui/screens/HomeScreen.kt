@@ -60,20 +60,12 @@ fun HomeScreen(
                         .padding(18.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(CyanPrimary, BlueSecondary))),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = user.displayName.firstOrNull()?.uppercase() ?: "P",
-                            color = BgDark,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
+                    RemoteAvatar(
+                        photoUrl = user.photoUrl,
+                        displayName = user.displayName,
+                        size = 56.dp,
+                        fontSize = 24
+                    )
                     Spacer(Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         UserNameWithBadges(
@@ -281,50 +273,102 @@ fun HomeScreen(
 
         // ── Quick Actions ───────────────────────────────────────────────────
         item {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceDark,
-                    border = BorderStroke(1.dp, BorderSubtle),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigate("referral") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate("referral") }
                     ) {
-                        Text("🎁", fontSize = 22.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text("Refer & Earn", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text("Invite friends", fontSize = 11.sp, color = GreenSuccess)
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🎁", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Refer & Earn", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("Invite friends", fontSize = 11.sp, color = GreenSuccess)
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate("leaderboard") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🏆", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Leaderboard", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("Global Rankings", fontSize = 11.sp, color = CyanPrimary)
+                            }
                         }
                     }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = SurfaceDark,
-                    border = BorderStroke(1.dp, BorderSubtle),
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onNavigate("leaderboard") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate("game_history") }
                     ) {
-                        Text("🏆", fontSize = 22.sp)
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text("Leaderboard", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text("Global Rankings", fontSize = 11.sp, color = CyanPrimary)
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("📜", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Game History", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("Matches & Rewards", fontSize = 11.sp, color = GoldAccent)
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate("tournaments") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("⚔️", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Tournaments", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("Live Arenas", fontSize = 11.sp, color = PurpleAccent)
+                            }
                         }
                     }
                 }

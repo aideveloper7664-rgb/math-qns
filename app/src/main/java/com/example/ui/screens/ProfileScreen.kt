@@ -3,7 +3,11 @@ package com.example.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.*
@@ -34,20 +39,80 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
 import com.example.ui.components.*
 import com.example.ui.theme.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 @Composable
 fun ProfileScreen(
     user: UserEntity?,
     withdrawals: List<com.example.data.model.TransactionEntity> = emptyList(),
+    photoUploading: Boolean = false,
     onUpdateProfile: (String, String?) -> Unit,
+    onUploadPhoto: (String) -> Unit = {},
     onNavigate: (String) -> Unit
 ) {
     if (user == null) return
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     var showEditDialog by remember { mutableStateOf(false) }
     var editName by remember { mutableStateOf(user.displayName) }
     var editPhoto by remember { mutableStateOf(user.photoUrl ?: "") }
+
+    val photoLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            coroutineScope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { stream ->
+                        val bytes = stream.readBytes()
+                        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+                        val maxDim = maxOf(boundsOpts.outWidth, boundsOpts.outHeight)
+                        var inSample = 1
+                        while (maxDim / (inSample * 2) >= 512) {
+                            inSample *= 2
+                        }
+                        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = inSample }
+                        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+                        if (bitmap != null) {
+                            val scaled = if (bitmap.width > 512 || bitmap.height > 512) {
+                                val scale = 512f / maxOf(bitmap.width, bitmap.height)
+                                Bitmap.createScaledBitmap(
+                                    bitmap,
+                                    (bitmap.width * scale).toInt().coerceAtLeast(1),
+                                    (bitmap.height * scale).toInt().coerceAtLeast(1),
+                                    true
+                                )
+                            } else {
+                                bitmap
+                            }
+                            val baos = ByteArrayOutputStream()
+                            var quality = 80
+                            scaled.compress(Bitmap.CompressFormat.JPEG, quality, baos)
+                            var compressedBytes = baos.toByteArray()
+                            if (compressedBytes.size > 4 * 1024 * 1024) {
+                                baos.reset()
+                                quality = 60
+                                scaled.compress(Bitmap.CompressFormat.JPEG, quality, baos)
+                                compressedBytes = baos.toByteArray()
+                            }
+                            val b64 = android.util.Base64.encodeToString(compressedBytes, android.util.Base64.NO_WRAP)
+                            withContext(Dispatchers.Main) {
+                                onUploadPhoto(b64)
+                                showEditDialog = false
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Failed to read image: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
 
     var soundEnabled by remember { mutableStateOf(true) }
     var hapticsEnabled by remember { mutableStateOf(true) }

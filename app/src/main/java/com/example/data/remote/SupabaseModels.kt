@@ -182,9 +182,24 @@ data class SupabaseVipPlanDto(
     @Json(name = "name") val name: String,
     @Json(name = "price") val price: Double,
     @Json(name = "duration_days") val durationDays: Long,
-    @Json(name = "perks") val perks: List<String>? = null,
+    @Json(name = "benefits") val benefits: Any? = null,
     @Json(name = "enabled") val enabled: Boolean? = true
-)
+) {
+    fun benefitLines(): List<String> {
+        if (benefits is List<*>) {
+            return benefits.mapNotNull { it?.toString() }
+        }
+        if (benefits is Map<*, *>) {
+            return benefits.map { (k, v) ->
+                val keyStr = k.toString().replace("_", " ").replaceFirstChar { 
+                    if (it.isLowerCase()) it.titlecase(java.util.Locale.US) else it.toString() 
+                }
+                "$keyStr: $v"
+            }
+        }
+        return emptyList()
+    }
+}
 
 @JsonClass(generateAdapter = true)
 data class SupabaseBadgeDto(
@@ -291,13 +306,18 @@ data class StartGameResponse(
 
 @JsonClass(generateAdapter = true)
 data class SubmitAnswerResponse(
+    @Json(name = "success") val success: Boolean = true,
     @Json(name = "correct") val correct: Boolean = false,
     @Json(name = "correct_answer") val correctAnswer: String? = null,
     @Json(name = "points_earned") val pointsEarned: Int = 0,
     @Json(name = "total_score") val totalScore: Int = 0,
+    @Json(name = "correct_answers") val correctAnswers: Int = 0,
     @Json(name = "game_over") val gameOver: Boolean = false,
     @Json(name = "reason") val reason: String? = null,
-    @Json(name = "prize") val prize: Double = 0.0
+    @Json(name = "prize") val prize: Double = 0.0,
+    @Json(name = "refund") val refund: Double = 0.0,
+    @Json(name = "refund_applied") val refundApplied: Boolean = false,
+    @Json(name = "error") val error: String? = null
 )
 
 data class GameResult(
@@ -305,7 +325,78 @@ data class GameResult(
     val correctAnswers: Int,
     val questionsAnswered: Int,
     val prize: Double,
-    val reason: String?
+    val reason: String?,
+    val refund: Double = 0.0,
+    val refundApplied: Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
+data class GameConfigRow(
+    @Json(name = "key") val key: String,
+    @Json(name = "value") val value: Map<String, Any?>? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class GameHistoryItem(
+    @Json(name = "session_id") val sessionId: String,
+    @Json(name = "entry_fee") val entryFee: Double = 0.0,
+    @Json(name = "total_score") val totalScore: Int = 0,
+    @Json(name = "correct_answers") val correctAnswers: Int = 0,
+    @Json(name = "wrong_answers") val wrongAnswers: Int = 0,
+    @Json(name = "timeouts") val timeouts: Int = 0,
+    @Json(name = "questions_attempted") val questionsAttempted: Int = 0,
+    @Json(name = "status") val status: String = "",
+    @Json(name = "started_at") val startedAt: String? = null,
+    @Json(name = "ended_at") val endedAt: String? = null,
+    @Json(name = "wallet_impact") val walletImpact: Double = 0.0,
+    @Json(name = "prize_earned") val prizeEarned: Double = 0.0,
+    @Json(name = "refund_amount") val refundAmount: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class PurchaseVipResponse(
+    @Json(name = "success") val success: Boolean = false,
+    @Json(name = "tier") val tier: String? = null,
+    @Json(name = "expires_at") val expiresAt: String? = null,
+    @Json(name = "amount_paid") val amountPaid: Double? = null,
+    @Json(name = "error") val error: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class TournamentLiveDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "description") val description: String? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "entry_fee") val entryFee: Double? = 0.0,
+    @Json(name = "prize_pool") val prizePool: Double? = 0.0,
+    @Json(name = "players_joined") val playersJoined: Int? = 0,
+    @Json(name = "max_players") val maxPlayers: Int? = 0,
+    @Json(name = "start_time") val startTime: String? = null,
+    @Json(name = "end_time") val endTime: String? = null,
+    @Json(name = "type") val type: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class KnockoutMatchupDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "tournament_id") val tournamentId: String? = null,
+    @Json(name = "round_number") val roundNumber: Int = 1,
+    @Json(name = "matchup_number") val matchupNumber: Int = 1,
+    @Json(name = "player1_id") val player1Id: String? = null,
+    @Json(name = "player2_id") val player2Id: String? = null,
+    @Json(name = "player1_score") val player1Score: Int? = null,
+    @Json(name = "player2_score") val player2Score: Int? = null,
+    @Json(name = "winner_id") val winnerId: String? = null,
+    @Json(name = "status") val status: String = "PENDING"
+)
+
+@JsonClass(generateAdapter = true)
+data class KnockoutParticipantDto(
+    @Json(name = "user_id") val userId: String,
+    @Json(name = "user_name") val userName: String? = null,
+    @Json(name = "seed") val seed: Int? = 1,
+    @Json(name = "status") val status: String? = null
 )
 
 @JsonClass(generateAdapter = true)

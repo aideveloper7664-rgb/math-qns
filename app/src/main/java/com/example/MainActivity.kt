@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.components.ArenaBottomNav
 import com.example.ui.components.ArenaTopBar
+import com.example.ui.components.PlayConfirmationDialog
 import com.example.ui.screens.*
 import com.example.ui.wallet.*
 import com.example.ui.theme.SpeedMathTheme
@@ -58,6 +59,15 @@ class MainActivity : ComponentActivity() {
                 val chatMessages by viewModel.currentChatMessages.collectAsStateWithLifecycle()
                 val gameState by viewModel.gameState.collectAsStateWithLifecycle()
                 val withdrawSubmitting by viewModel.withdrawSubmitting.collectAsStateWithLifecycle()
+
+                val gameConfig by viewModel.gameConfig.collectAsStateWithLifecycle()
+                val showPlayConfirm by viewModel.showPlayConfirm.collectAsStateWithLifecycle()
+                val gameHistory by viewModel.gameHistory.collectAsStateWithLifecycle()
+                val photoUploading by viewModel.photoUploading.collectAsStateWithLifecycle()
+                val vipPlans by viewModel.vipPlans.collectAsStateWithLifecycle()
+                val vipLoading by viewModel.vipLoading.collectAsStateWithLifecycle()
+                val liveTournaments by viewModel.liveTournaments.collectAsStateWithLifecycle()
+                val tournamentsLoading by viewModel.tournamentsLoading.collectAsStateWithLifecycle()
 
                 var currentRoute by remember { mutableStateOf("home") }
                 var activeCheckoutUrl by remember { mutableStateOf<String?>(null) }
@@ -113,6 +123,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Play confirmation popup dialog
+                if (showPlayConfirm) {
+                    PlayConfirmationDialog(
+                        entryFee = gameConfig.entryFee,
+                        title = gameConfig.playTitle,
+                        messageTemplate = gameConfig.playMessage,
+                        onConfirm = { viewModel.confirmPlay() },
+                        onDismiss = { viewModel.dismissPlayConfirm() }
+                    )
+                }
+
                 // Handle Back Button
                 if (currentRoute != "home" && !gameState.active && !gameState.isGameOver) {
                     BackHandler {
@@ -121,6 +142,9 @@ class MainActivity : ComponentActivity() {
                             "payment_processing" -> currentRoute = "wallet"
                             "deposit", "add_money" -> currentRoute = "wallet"
                             "withdraw", "transactions" -> currentRoute = "wallet"
+                            "settings" -> currentRoute = "profile"
+                            "game_history", "history" -> currentRoute = "home"
+                            "tournaments", "live_tournaments" -> currentRoute = "home"
                             else -> currentRoute = "home"
                         }
                     }
@@ -196,7 +220,7 @@ class MainActivity : ComponentActivity() {
                                         user = currentUser,
                                         recentSessions = recentSessions,
                                         onStartGame = {
-                                            viewModel.startGame()
+                                            viewModel.requestPlay()
                                         },
                                         onNavigate = { target -> currentRoute = target }
                                     )
@@ -286,8 +310,10 @@ class MainActivity : ComponentActivity() {
 
                                     "vip" -> VipScreen(
                                         user = currentUser,
-                                        onPurchaseVip = { tier, price, days ->
-                                            viewModel.purchaseVip(tier, price, days)
+                                        plans = vipPlans,
+                                        isLoading = vipLoading,
+                                        onPurchaseVip = { tier ->
+                                            viewModel.purchaseVip(tier)
                                         },
                                         onBack = { currentRoute = "home" }
                                     )
@@ -303,6 +329,21 @@ class MainActivity : ComponentActivity() {
                                         onBack = { currentRoute = "home" }
                                     )
 
+                                    "tournaments", "live_tournaments" -> TournamentsScreen(
+                                        tournaments = liveTournaments,
+                                        isLoading = tournamentsLoading,
+                                        onRefresh = { viewModel.loadLiveTournaments() },
+                                        onStartAutoRefresh = { viewModel.startTournamentsAutoRefresh() },
+                                        onStopAutoRefresh = { viewModel.stopTournamentsAutoRefresh() },
+                                        onBack = { currentRoute = "home" }
+                                    )
+
+                                    "game_history", "history" -> GameHistoryScreen(
+                                        state = gameHistory,
+                                        onRefresh = { viewModel.loadGameHistory() },
+                                        onBack = { currentRoute = "home" }
+                                    )
+
                                     "knockout" -> KnockoutScreen(
                                         tournaments = allKnockoutTournaments,
                                         onBack = { currentRoute = "home" }
@@ -311,8 +352,12 @@ class MainActivity : ComponentActivity() {
                                     "profile" -> ProfileScreen(
                                         user = currentUser,
                                         withdrawals = userWithdrawals,
+                                        photoUploading = photoUploading,
                                         onUpdateProfile = { name, photo ->
                                             viewModel.updateProfile(name, photo)
+                                        },
+                                        onUploadPhoto = { base64 ->
+                                            viewModel.uploadProfilePhoto(base64)
                                         },
                                         onNavigate = { target -> currentRoute = target }
                                     )
@@ -335,7 +380,7 @@ class MainActivity : ComponentActivity() {
                                         user = currentUser,
                                         recentSessions = recentSessions,
                                         onStartGame = {
-                                            viewModel.startGame()
+                                            viewModel.requestPlay()
                                         },
                                         onNavigate = { target -> currentRoute = target }
                                     )
