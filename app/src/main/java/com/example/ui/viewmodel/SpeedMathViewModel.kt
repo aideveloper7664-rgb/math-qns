@@ -5,10 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AppDatabase
 import com.example.data.model.*
-import com.example.data.remote.GameResult
-import com.example.data.remote.GameSessionDto
-import com.example.data.remote.QuestionData
-import com.example.data.remote.SupabaseClient
+import com.example.data.remote.*
 import com.example.data.repository.DepositRepository
 import com.example.data.repository.RpcResult
 import com.example.data.repository.SinglePlayerGameRepository
@@ -40,6 +37,15 @@ data class GameState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val errorRetryable: Boolean = true
+)
+
+data class LeaderboardUiState(
+    val metric: String = "best_score",
+    val rows: List<LeaderboardRow> = emptyList(),
+    val me: LeaderboardMe? = null,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val updatedAtMs: Long? = null
 )
 
 sealed class ToastEvent {
@@ -74,14 +80,58 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         if (id == null) flowOf(emptyList()) else repository.getUserTransactions(id)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val topUsersByMmr = repository.topUsersByMmr
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _leaderboardState = MutableStateFlow(LeaderboardUiState())
+    val leaderboardState: StateFlow<LeaderboardUiState> = _leaderboardState.asStateFlow()
+    private var leaderboardAutoJob: Job? = null
+    private var leaderboardLoadJob: Job? = null
 
-    val topUsersByXp = repository.topUsersByXp
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun setLeaderboardMetric(metric: String) {
+        if (metric == _leaderboardState.value.metric) return
+        _leaderboardState.value = _leaderboardState.value.copy(
+            metric = metric, rows = emptyList(), me = null, errorMessage = null, updatedAtMs = null
+        )
+        loadLeaderboard()
+    }
 
-    val topUsersByWins = repository.topUsersByWins
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    fun loadLeaderboard() {
+        val metric = _leaderboardState.value.metric
+        leaderboardLoadJob?.cancel()
+        leaderboardLoadJob = viewModelScope.launch {
+            _leaderboardState.value = _leaderboardState.value.copy(isLoading = true)
+            when (val r = repository.fetchLeaderboard(metric)) {
+                is RpcResult.Ok -> {
+                    if (_leaderboardState.value.metric == metric) {
+                        _leaderboardState.value = _leaderboardState.value.copy(
+                            rows = r.value.rows, me = r.value.me, isLoading = false,
+                            errorMessage = null, updatedAtMs = System.currentTimeMillis()
+                        )
+                    }
+                }
+                is RpcResult.Err -> {
+                    if (_leaderboardState.value.metric == metric) {
+                        _leaderboardState.value = _leaderboardState.value.copy(
+                            isLoading = false, errorMessage = r.message
+                        ) // rows are kept on purpose
+                    }
+                }
+            }
+        }
+    }
+
+    fun startLeaderboardAutoRefresh() {
+        leaderboardAutoJob?.cancel()
+        leaderboardAutoJob = viewModelScope.launch {
+            while (isActive) {
+                loadLeaderboard()
+                delay(30_000)
+            }
+        }
+    }
+
+    fun stopLeaderboardAutoRefresh() {
+        leaderboardAutoJob?.cancel()
+        leaderboardAutoJob = null
+    }
 
     val allTournaments = repository.allTournaments
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -397,6 +447,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
 
                         currentUserId.value?.let { uid ->
                             refreshUserData(uid)
+                            loadLeaderboard()
                         }
                     }
                 }

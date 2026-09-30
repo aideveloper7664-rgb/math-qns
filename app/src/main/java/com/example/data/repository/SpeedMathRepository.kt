@@ -310,6 +310,31 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
 
 
 
+    suspend fun fetchLeaderboard(metric: String): RpcResult<LeaderboardResponse> = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getLeaderboardRpc(
+                mapOf("p_metric" to metric, "p_limit" to 50)
+            )
+            if (res.isSuccessful) {
+                val body = res.body()
+                if (body != null && body.success) {
+                    RpcResult.Ok(body)
+                } else {
+                    RpcResult.Err(body?.error ?: "Leaderboard unavailable", res.code())
+                }
+            } else {
+                val eb = res.errorBody()?.string()?.take(300)
+                Log.e("Leaderboard", "get_leaderboard code=${res.code()} body=$eb")
+                RpcResult.Err("Could not load leaderboard (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Leaderboard", "get_leaderboard failed", e)
+            RpcResult.Err("Offline or server unreachable")
+        }
+    }
+
     // -------------------------------------------------------------
     // Sync Real Data from Supabase
     // -------------------------------------------------------------
@@ -319,13 +344,6 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             // 1. Sync Current User Profile
             if (currentUserId != null) {
                 fetchAndSyncUserProfile(currentUserId, null)
-            }
-
-            // 2. Sync Top Users / Leaderboard
-            val usersRes = SupabaseClient.restApi.getUsers(limit = 50)
-            if (usersRes.isSuccessful && usersRes.body() != null) {
-                val userEntities = usersRes.body()!!.map { mapDtoToUserEntity(it) }
-                userEntities.forEach { dao.insertUser(it) }
             }
 
             // 3. Sync Tournaments

@@ -48,9 +48,7 @@ class MainActivity : ComponentActivity() {
                 val userReferrals by viewModel.userReferrals.collectAsStateWithLifecycle()
                 val userWithdrawals by viewModel.userWithdrawals.collectAsStateWithLifecycle()
                 val userTransactions by viewModel.userTransactions.collectAsStateWithLifecycle()
-                val topUsersByMmr by viewModel.topUsersByMmr.collectAsStateWithLifecycle()
-                val topUsersByXp by viewModel.topUsersByXp.collectAsStateWithLifecycle()
-                val topUsersByWins by viewModel.topUsersByWins.collectAsStateWithLifecycle()
+                val leaderboardState by viewModel.leaderboardState.collectAsStateWithLifecycle()
                 val allTournaments by viewModel.allTournaments.collectAsStateWithLifecycle()
                 val allKnockoutTournaments by viewModel.allKnockoutTournaments.collectAsStateWithLifecycle()
                 val notifications by viewModel.notifications.collectAsStateWithLifecycle()
@@ -267,9 +265,11 @@ class MainActivity : ComponentActivity() {
 
                                     "leaderboard" -> LeaderboardScreen(
                                         currentUserId = currentUser?.id,
-                                        topUsersByMmr = topUsersByMmr,
-                                        topUsersByXp = topUsersByXp,
-                                        topUsersByWins = topUsersByWins
+                                        state = leaderboardState,
+                                        onMetricChange = { viewModel.setLeaderboardMetric(it) },
+                                        onRefresh = { viewModel.loadLeaderboard() },
+                                        onStartAutoRefresh = { viewModel.startLeaderboardAutoRefresh() },
+                                        onStopAutoRefresh = { viewModel.stopLeaderboardAutoRefresh() }
                                     )
 
                                     "chat" -> ChatScreen(

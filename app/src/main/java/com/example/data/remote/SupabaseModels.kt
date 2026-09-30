@@ -324,3 +324,31 @@ data class GameSessionDto(
     @Json(name = "ended_at") val endedAt: String? = null
 )
 
+@JsonClass(generateAdapter = true)
+data class LeaderboardRow(
+    @Json(name = "rank") val rank: Int = 0,
+    @Json(name = "user_id") val userId: String = "",
+    @Json(name = "display_name") val displayName: String? = null,
+    @Json(name = "photo_url") val photoUrl: String? = null,
+    @Json(name = "is_verified") val isVerified: Boolean = false,
+    @Json(name = "has_gold_crown") val hasGoldCrown: Boolean = false,
+    @Json(name = "vip_tier") val vipTier: String = "none",
+    @Json(name = "value") val value: Double = 0.0
+)
+
+@JsonClass(generateAdapter = true)
+data class LeaderboardMe(
+    @Json(name = "rank") val rank: Int = 0,
+    @Json(name = "value") val value: Double = 0.0
+)
+
+@JsonClass(generateAdapter = true)
+data class LeaderboardResponse(
+    @Json(name = "success") val success: Boolean = false,
+    @Json(name = "metric") val metric: String = "",
+    @Json(name = "rows") val rows: List<LeaderboardRow> = emptyList(),
+    @Json(name = "me") val me: LeaderboardMe? = null,
+    @Json(name = "generated_at") val generatedAt: String? = null,
+    @Json(name = "error") val error: String? = null
+)
+

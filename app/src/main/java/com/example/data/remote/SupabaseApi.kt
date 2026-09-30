@@ -230,5 +230,10 @@ interface SupabaseRestApi {
     suspend fun insertSessionQuestion(
         @Body body: Map<String, @JvmSuppressWildcards Any?>
     ): Response<Unit>
+
+    @POST("rest/v1/rpc/get_leaderboard")
+    suspend fun getLeaderboardRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<LeaderboardResponse>
 }
 
