@@ -14,6 +14,8 @@ data class UserEntity(
     val mmr: Int = 1000,
     val xp: Int = 0,
     val walletBalance: Double = 0.0,
+    val depositBalance: Double = 0.0,
+    val winningsBalance: Double = 0.0,
     val lockedBalance: Double = 0.0,
     val matchesPlayed: Int = 0,
     val wins: Int = 0,

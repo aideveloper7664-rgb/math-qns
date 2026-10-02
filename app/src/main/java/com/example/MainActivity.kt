@@ -68,6 +68,15 @@ class MainActivity : ComponentActivity() {
                 val vipLoading by viewModel.vipLoading.collectAsStateWithLifecycle()
                 val liveTournaments by viewModel.liveTournaments.collectAsStateWithLifecycle()
                 val tournamentsLoading by viewModel.tournamentsLoading.collectAsStateWithLifecycle()
+                val joinedTournamentIds by viewModel.joinedTournamentIds.collectAsStateWithLifecycle()
+                val tournamentJoiningId by viewModel.tournamentJoiningId.collectAsStateWithLifecycle()
+                val knockoutTournaments by viewModel.knockoutTournaments.collectAsStateWithLifecycle()
+                val knockoutLoading by viewModel.knockoutLoading.collectAsStateWithLifecycle()
+                val knockoutError by viewModel.knockoutError.collectAsStateWithLifecycle()
+                val knockoutMatchups by viewModel.knockoutMatchups.collectAsStateWithLifecycle()
+                val knockoutParticipants by viewModel.knockoutParticipants.collectAsStateWithLifecycle()
+                val joinedKnockoutIds by viewModel.joinedKnockoutIds.collectAsStateWithLifecycle()
+                val knockoutJoiningId by viewModel.knockoutJoiningId.collectAsStateWithLifecycle()
 
                 var currentRoute by remember { mutableStateOf("home") }
                 var activeCheckoutUrl by remember { mutableStateOf<String?>(null) }
@@ -162,6 +171,8 @@ class MainActivity : ComponentActivity() {
                 } else if (gameState.active || gameState.isGameOver) {
                     GameScreen(
                         state = gameState,
+                        config = gameConfig,
+                        user = currentUser,
                         onAnswer = { answer ->
                             viewModel.submitAnswer(answer)
                         },
@@ -171,6 +182,10 @@ class MainActivity : ComponentActivity() {
                         onGoHome = {
                             viewModel.quitGame()
                             currentRoute = "home"
+                        },
+                        onViewHistory = {
+                            viewModel.quitGame()
+                            currentRoute = "game_history"
                         },
                         onRetry = {
                             if (gameState.currentQuestion == null) viewModel.retryLoadQuestion()
@@ -329,9 +344,20 @@ class MainActivity : ComponentActivity() {
                                         onBack = { currentRoute = "home" }
                                     )
 
+                                    "practice" -> PracticeScreen(
+                                        onBack = { currentRoute = "home" }
+                                    )
+
+                                    "policies" -> PoliciesScreen(
+                                        onBack = { currentRoute = "home" }
+                                    )
+
                                     "tournaments", "live_tournaments" -> TournamentsScreen(
                                         tournaments = liveTournaments,
                                         isLoading = tournamentsLoading,
+                                        joinedTournamentIds = joinedTournamentIds,
+                                        joiningTournamentId = tournamentJoiningId,
+                                        onJoinTournament = { id -> viewModel.joinLiveTournament(id) },
                                         onRefresh = { viewModel.loadLiveTournaments() },
                                         onStartAutoRefresh = { viewModel.startTournamentsAutoRefresh() },
                                         onStopAutoRefresh = { viewModel.stopTournamentsAutoRefresh() },
@@ -345,7 +371,17 @@ class MainActivity : ComponentActivity() {
                                     )
 
                                     "knockout" -> KnockoutScreen(
-                                        tournaments = allKnockoutTournaments,
+                                        tournaments = knockoutTournaments,
+                                        isLoading = knockoutLoading,
+                                        errorMessage = knockoutError,
+                                        onRefresh = { viewModel.loadKnockoutTournaments() },
+                                        onLoadBracket = { id -> viewModel.loadKnockoutBracket(id) },
+                                        bracketMatchups = knockoutMatchups,
+                                        bracketParticipants = knockoutParticipants,
+                                        bracketLoading = knockoutLoading,
+                                        joinedTournamentIds = joinedKnockoutIds,
+                                        joiningTournamentId = knockoutJoiningId,
+                                        onJoinTournament = { id -> viewModel.joinKnockoutTournament(id) },
                                         onBack = { currentRoute = "home" }
                                     )
 

@@ -40,13 +40,15 @@ private val bitmapCache: LruCache<String, Bitmap> by lazy {
 
 @Composable
 fun RemoteAvatar(
-    photoUrl: String?,
-    displayName: String,
+    photoUrl: String? = null,
+    displayName: String = "Player",
     modifier: Modifier = Modifier,
     size: Dp = 44.dp,
-    fontSize: Int = 16
+    fontSize: Int = 16,
+    url: String? = photoUrl
 ) {
-    if (photoUrl.isNullOrBlank()) {
+    val actualUrl = url ?: photoUrl
+    if (actualUrl.isNullOrBlank()) {
         AvatarCircle(
             displayName = displayName,
             modifier = modifier,
@@ -56,7 +58,7 @@ fun RemoteAvatar(
         return
     }
 
-    val trimmed = photoUrl.trim()
+    val trimmed = actualUrl.trim()
 
     // Emoji preset (length <= 3)
     if (trimmed.length <= 3) {

@@ -36,6 +36,8 @@ data class SupabaseUserDto(
     @Json(name = "mmr") val mmr: Int? = 1000,
     @Json(name = "xp") val xp: Int? = 0,
     @Json(name = "wallet_balance") val walletBalance: Double? = 0.0,
+    @Json(name = "deposit_balance") val depositBalance: Double? = 0.0,
+    @Json(name = "winnings_balance") val winningsBalance: Double? = 0.0,
     @Json(name = "locked_balance") val lockedBalance: Double? = 0.0,
     @Json(name = "matches_played") val matchesPlayed: Int? = 0,
     @Json(name = "wins") val wins: Int? = 0,
@@ -378,6 +380,24 @@ data class TournamentLiveDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class KnockoutTournamentDto(
+    @Json(name = "id") val id: String,
+    @Json(name = "name") val name: String? = null,
+    @Json(name = "description") val description: String? = null,
+    @Json(name = "entry_fee") val entryFee: Double? = 0.0,
+    @Json(name = "max_players") val maxPlayers: Int? = 16,
+    @Json(name = "total_rounds") val totalRounds: Int? = 4,
+    @Json(name = "current_round") val currentRound: Int? = 0,
+    @Json(name = "status") val status: String? = "REGISTRATION",
+    @Json(name = "scheduled_start") val scheduledStart: String? = null,
+    @Json(name = "started_at") val startedAt: String? = null,
+    @Json(name = "winner_id") val winnerId: String? = null,
+    @Json(name = "created_at") val createdAt: String? = null,
+    @Json(name = "bot_fill_enabled") val botFillEnabled: Boolean = true,
+    @Json(name = "bot_difficulty") val botDifficulty: String = "medium"
+)
+
+@JsonClass(generateAdapter = true)
 data class KnockoutMatchupDto(
     @Json(name = "id") val id: String,
     @Json(name = "tournament_id") val tournamentId: String? = null,
@@ -388,15 +408,31 @@ data class KnockoutMatchupDto(
     @Json(name = "player1_score") val player1Score: Int? = null,
     @Json(name = "player2_score") val player2Score: Int? = null,
     @Json(name = "winner_id") val winnerId: String? = null,
-    @Json(name = "status") val status: String = "PENDING"
+    @Json(name = "status") val status: String = "PENDING",
+    @Json(name = "is_bot_match") val isBotMatch: Boolean = false,
+    @Json(name = "bot_display_name") val botDisplayName: String? = null,
+    @Json(name = "bot_score") val botScore: Int? = null,
+    val player1Name: String? = null,
+    val player2Name: String? = null
 )
 
 @JsonClass(generateAdapter = true)
 data class KnockoutParticipantDto(
     @Json(name = "user_id") val userId: String,
+    @Json(name = "tournament_id") val tournamentId: String? = null,
     @Json(name = "user_name") val userName: String? = null,
     @Json(name = "seed") val seed: Int? = 1,
     @Json(name = "status") val status: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class JoinKnockoutResponse(
+    @Json(name = "success") val success: Boolean = false,
+    @Json(name = "entry_fee_paid") val entryFeePaid: Double? = null,
+    @Json(name = "new_balance") val newBalance: Double? = null,
+    @Json(name = "tournament_id") val tournamentId: String? = null,
+    @Json(name = "error") val error: String? = null,
+    @Json(name = "message") val message: String? = null
 )
 
 @JsonClass(generateAdapter = true)

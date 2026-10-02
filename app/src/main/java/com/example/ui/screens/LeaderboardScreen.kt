@@ -376,7 +376,7 @@ fun LeaderboardScreen(
                                     modifier = Modifier.width(34.dp)
                                 )
 
-                                AvatarCircle(displayName = row.displayName ?: "Player", size = 36.dp, fontSize = 13)
+                                RemoteAvatar(url = row.photoUrl, displayName = row.displayName ?: "Player", size = 36.dp)
                                 Spacer(modifier = Modifier.width(10.dp))
 
                                 Column(modifier = Modifier.weight(1f)) {
@@ -430,10 +430,10 @@ private fun PodiumPillarRow(
         Text(medal, fontSize = 20.sp)
         Spacer(modifier = Modifier.height(2.dp))
 
-        AvatarCircle(
+        RemoteAvatar(
+            url = row.photoUrl,
             displayName = row.displayName ?: "Player",
-            size = if (row.rank == 1) 48.dp else 40.dp,
-            fontSize = if (row.rank == 1) 16 else 14
+            size = if (row.rank == 1) 48.dp else 40.dp
         )
 
         Spacer(modifier = Modifier.height(4.dp))

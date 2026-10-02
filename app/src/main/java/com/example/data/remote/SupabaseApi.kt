@@ -1,5 +1,6 @@
 package com.example.data.remote
 
+import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -204,7 +205,7 @@ interface SupabaseRestApi {
 
     @POST("rest/v1/rpc/submit_answer")
     suspend fun submitAnswerRpc(
-        @Body body: Map<String, @JvmSuppressWildcards Any?>
+        @Body body: RequestBody
     ): Response<Map<String, Any?>>
 
     @POST("rest/v1/rpc/end_game")
@@ -256,10 +257,17 @@ interface SupabaseRestApi {
     @GET("rest/v1/tournaments")
     suspend fun getLiveTournaments(
         @Query("select") select: String = "*",
-        @Query("status") status: String = "in.(UPCOMING,LIVE)",
-        @Query("or") or: String,
-        @Query("order") order: String = "start_time.asc"
+        @Query("status") status: String? = null,
+        @Query("or") or: String? = null,
+        @Query("order") order: String = "start_time.desc,created_at.desc"
     ): Response<List<TournamentLiveDto>>
+
+    @GET("rest/v1/knockout_tournaments")
+    suspend fun getKnockoutTournaments(
+        @Query("select") select: String = "*",
+        @Query("status") status: String? = null,
+        @Query("order") order: String = "created_at.desc"
+    ): Response<List<KnockoutTournamentDto>>
 
     @GET("rest/v1/knockout_matchups")
     suspend fun getKnockoutMatchups(
@@ -270,8 +278,24 @@ interface SupabaseRestApi {
 
     @GET("rest/v1/knockout_participants")
     suspend fun getKnockoutParticipants(
-        @Query("select") select: String = "user_id,user_name,seed,status",
+        @Query("select") select: String = "user_id,tournament_id,user_name,seed,status",
         @Query("tournament_id") tournamentId: String
     ): Response<List<KnockoutParticipantDto>>
+
+    @GET("rest/v1/knockout_participants")
+    suspend fun getUserKnockoutParticipants(
+        @Query("select") select: String = "user_id,tournament_id,user_name,seed,status",
+        @Query("user_id") userQuery: String
+    ): Response<List<KnockoutParticipantDto>>
+
+    @POST("rest/v1/rpc/join_knockout_tournament")
+    suspend fun joinKnockoutTournamentRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<JoinKnockoutResponse>
+
+    @POST("rest/v1/rpc/join_tournament")
+    suspend fun joinTournamentRpc(
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<JoinKnockoutResponse>
 }
 

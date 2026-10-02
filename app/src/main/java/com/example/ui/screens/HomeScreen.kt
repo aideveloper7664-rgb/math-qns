@@ -238,35 +238,87 @@ fun HomeScreen(
                         )
                     }
                 }
+
+                Spacer(Modifier.height(10.dp))
+
+                OutlinedButton(
+                    onClick = { onNavigate("practice") },
+                    modifier = Modifier.fillMaxWidth().height(46.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, CyanPrimary.copy(alpha = 0.5f))
+                ) {
+                    Text("🎯 Practice Mode (Free Play)", fontWeight = FontWeight.Bold, color = CyanPrimary, fontSize = 14.sp)
+                }
             }
         }
 
-        // ── 4. Progressive Game Rules Card ──────────────────────────────────
+        // ── VIP Pass Promotion Banner ────────────────────────────────────────
         item {
             Surface(
                 shape = RoundedCornerShape(16.dp),
-                color = SurfaceDark,
-                border = BorderStroke(1.dp, BorderSubtle),
+                color = SurfaceCard,
+                border = BorderStroke(1.dp, GoldAccent.copy(alpha = 0.6f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 20.dp)
+                    .padding(bottom = 16.dp)
+                    .clickable { onNavigate("vip") }
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("⚡", fontSize = 18.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "How Progressive Play Works",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = TextPrimary
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(
+                                    GoldAccent.copy(alpha = 0.15f),
+                                    PurpleAccent.copy(alpha = 0.10f)
+                                )
+                            )
+                        )
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Surface(
+                                shape = CircleShape,
+                                color = GoldAccent.copy(alpha = 0.2f),
+                                border = BorderStroke(1.dp, GoldAccent),
+                                modifier = Modifier.size(42.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("👑", fontSize = 20.sp)
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("VIP Pass & Perks", fontSize = 14.sp, fontWeight = FontWeight.Black, color = TextPrimary)
+                                    Surface(color = GoldAccent, shape = RoundedCornerShape(4.dp)) {
+                                        Text(
+                                            text = if (user.vipTier != "none") user.vipTier.uppercase() else "HOT",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = BgDark,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = if (user.vipTier != "none") "Active member • Tap to view plans" else "Gold crown, multipliers & exclusive perks",
+                                    fontSize = 11.sp,
+                                    color = TextMuted
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Open VIP",
+                            tint = GoldAccent
                         )
                     }
-                    Spacer(Modifier.height(10.dp))
-                    RuleBullet(num = "1", text = "Q1 starts with 10.0s (Easy). Decreases by 0.2s each question down to 8.0s min!")
-                    RuleBullet(num = "2", text = "Answer correctly to advance and gain speed bonus points.")
-                    RuleBullet(num = "3", text = "1 wrong answer or timeout = GAME OVER!")
-                    RuleBullet(num = "4", text = "Prize = Final Score ÷ 100 instantly credited to your wallet (up to ₹100)!")
                 }
             }
         }
@@ -336,27 +388,6 @@ fun HomeScreen(
                         border = BorderStroke(1.dp, BorderSubtle),
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { onNavigate("game_history") }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("📜", fontSize = 22.sp)
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text("Game History", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                                Text("Matches & Rewards", fontSize = 11.sp, color = GoldAccent)
-                            }
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = SurfaceDark,
-                        border = BorderStroke(1.dp, BorderSubtle),
-                        modifier = Modifier
-                            .weight(1f)
                             .clickable { onNavigate("tournaments") }
                     ) {
                         Row(
@@ -368,6 +399,53 @@ fun HomeScreen(
                             Column {
                                 Text("Tournaments", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                                 Text("Live Arenas", fontSize = 11.sp, color = PurpleAccent)
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onNavigate("knockout") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("🥊", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Knockouts", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("Bracket Arenas", fontSize = 11.sp, color = CyanPrimary)
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, BorderSubtle),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigate("game_history") }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("📜", fontSize = 22.sp)
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text("Game Match History", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                Text("View your past matches, accuracy, and wallet rewards", fontSize = 11.sp, color = GoldAccent)
                             }
                         }
                     }
@@ -438,28 +516,6 @@ fun HomeScreen(
                 Spacer(Modifier.height(8.dp))
             }
         }
-    }
-}
-
-@Composable
-fun RuleBullet(num: String, text: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(
-            modifier = Modifier
-                .size(18.dp)
-                .clip(CircleShape)
-                .background(CyanPrimary.copy(alpha = 0.2f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(num, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(text, fontSize = 12.sp, color = TextMuted, lineHeight = 16.sp)
     }
 }
 

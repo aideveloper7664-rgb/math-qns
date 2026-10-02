@@ -124,11 +124,18 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     private val _liveTournaments = MutableStateFlow<List<TournamentLiveDto>>(emptyList())
     val liveTournaments: StateFlow<List<TournamentLiveDto>> = _liveTournaments.asStateFlow()
     val tournamentsLoading = MutableStateFlow(false)
+    val joinedTournamentIds = MutableStateFlow<Set<String>>(emptySet())
+    val tournamentJoiningId = MutableStateFlow<String?>(null)
     private var tournamentsAutoJob: Job? = null
 
+    private val _knockoutTournaments = MutableStateFlow<List<KnockoutTournamentDto>>(emptyList())
+    val knockoutTournaments: StateFlow<List<KnockoutTournamentDto>> = _knockoutTournaments.asStateFlow()
+    val knockoutError = MutableStateFlow<String?>(null)
     val knockoutMatchups = MutableStateFlow<List<KnockoutMatchupDto>>(emptyList())
     val knockoutParticipants = MutableStateFlow<List<KnockoutParticipantDto>>(emptyList())
     val knockoutLoading = MutableStateFlow(false)
+    val joinedKnockoutIds = MutableStateFlow<Set<String>>(emptySet())
+    val knockoutJoiningId = MutableStateFlow<String?>(null)
 
     private var refundToastShownForSession = false
 
@@ -216,6 +223,8 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
         loadGameConfig()
         loadVipPlans()
+        loadLiveTournaments()
+        loadKnockoutTournaments()
     }
 
     fun loadGameConfig() {
@@ -549,7 +558,14 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
 
         viewModelScope.launch {
             _gameState.value = _gameState.value.copy(isLoading = true, errorMessage = null)
-            when (val res = singlePlayerRepo.submitAnswer(sessionId, question.questionId, answer, responseTimeMs)) {
+            when (val res = singlePlayerRepo.submitAnswer(
+                sessionId = sessionId,
+                questionId = question.questionId,
+                answer = answer,
+                responseTimeMs = responseTimeMs,
+                expectedCorrectAnswer = question.correctAnswer,
+                currentScore = state.score
+            )) {
                 is RpcResult.Ok -> {
                     val submitResp = res.value
                     val isCorrect = submitResp.correct
@@ -714,6 +730,29 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun joinLiveTournament(tournamentId: String) {
+        val userId = currentUserId.value ?: return
+        viewModelScope.launch {
+            tournamentJoiningId.value = tournamentId
+            val result = repository.joinLiveTournament(tournamentId)
+            tournamentJoiningId.value = null
+            when (result) {
+                is RpcResult.Ok -> {
+                    val resp = result.value
+                    joinedTournamentIds.value = joinedTournamentIds.value + tournamentId
+                    val feeMsg = if (resp.entryFeePaid != null && resp.entryFeePaid > 0) " ₹${resp.entryFeePaid.toInt()} deducted." else ""
+                    val balMsg = if (resp.newBalance != null) " Balance: ₹${"%.2f".format(resp.newBalance)}" else ""
+                    _toastEvent.emit(ToastEvent.Show("✅ Successfully joined tournament!$feeMsg$balMsg"))
+                    refreshUserData(userId)
+                    loadLiveTournaments()
+                }
+                is RpcResult.Err -> {
+                    _toastEvent.emit(ToastEvent.Show(result.message, isError = true))
+                }
+            }
+        }
+    }
+
     fun startTournamentsAutoRefresh() {
         tournamentsAutoJob?.cancel()
         tournamentsAutoJob = viewModelScope.launch {
@@ -727,6 +766,55 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
     fun stopTournamentsAutoRefresh() {
         tournamentsAutoJob?.cancel()
         tournamentsAutoJob = null
+    }
+
+    fun loadKnockoutTournaments() {
+        viewModelScope.launch {
+            knockoutLoading.value = true
+            knockoutError.value = null
+            when (val r = repository.fetchKnockoutTournaments()) {
+                is RpcResult.Ok -> {
+                    _knockoutTournaments.value = r.value
+                    knockoutLoading.value = false
+                }
+                is RpcResult.Err -> {
+                    knockoutError.value = r.message
+                    knockoutLoading.value = false
+                }
+            }
+            loadUserJoinedKnockouts()
+        }
+    }
+
+    fun loadUserJoinedKnockouts() {
+        val userId = currentUserId.value ?: return
+        viewModelScope.launch {
+            val joined = repository.fetchUserJoinedKnockoutIds(userId)
+            joinedKnockoutIds.value = joined
+        }
+    }
+
+    fun joinKnockoutTournament(tournamentId: String) {
+        val userId = currentUserId.value ?: return
+        viewModelScope.launch {
+            knockoutJoiningId.value = tournamentId
+            val result = repository.joinKnockoutTournament(tournamentId)
+            knockoutJoiningId.value = null
+            when (result) {
+                is RpcResult.Ok -> {
+                    val resp = result.value
+                    joinedKnockoutIds.value = joinedKnockoutIds.value + tournamentId
+                    val feeMsg = if (resp.entryFeePaid != null && resp.entryFeePaid > 0) " ₹${resp.entryFeePaid.toInt()} deducted." else ""
+                    val balMsg = if (resp.newBalance != null) " Balance: ₹${"%.2f".format(resp.newBalance)}" else ""
+                    _toastEvent.emit(ToastEvent.Show("✅ Successfully joined tournament!$feeMsg$balMsg"))
+                    refreshUserData(userId)
+                    loadKnockoutTournaments()
+                }
+                is RpcResult.Err -> {
+                    _toastEvent.emit(ToastEvent.Show(result.message, isError = true))
+                }
+            }
+        }
     }
 
     fun loadKnockoutBracket(tournamentId: String) {

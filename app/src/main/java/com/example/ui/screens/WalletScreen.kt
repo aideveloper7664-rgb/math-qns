@@ -56,14 +56,14 @@ fun WalletScreen(
         item {
             PageHeader(title = "Wallet", subtitle = "Manage your balance and payout status")
 
-            // ── Available Balance Card ──────────────────────────────────────
+            // ── 1. Total Wallet Card ─────────────────────────────────────────
             Surface(
                 shape = RoundedCornerShape(20.dp),
                 color = SurfaceCard,
                 border = BorderStroke(1.dp, BorderStrong),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp)
+                    .padding(bottom = 12.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -79,11 +79,11 @@ fun WalletScreen(
                         .padding(20.dp)
                 ) {
                     Column {
-                        Text("Available Balance", fontSize = 12.sp, color = TextMuted)
+                        Text("Total Wallet Balance", fontSize = 12.sp, color = TextMuted)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = fmtMoney(user.walletBalance),
-                            fontSize = 38.sp,
+                            fontSize = 36.sp,
                             fontWeight = FontWeight.Black,
                             color = TextPrimary
                         )
@@ -123,11 +123,96 @@ fun WalletScreen(
                 }
             }
 
+            // ── 2. Deposit Balance Card ───────────────────────────────────────
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceCard,
+                border = BorderStroke(1.dp, BorderSubtle),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("💳", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Deposit Balance",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = fmtMoney(user.depositBalance),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF5B7FFF)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "⚠️ Only for gameplay · Cannot withdraw",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = GoldAccent
+                        )
+                    }
+                }
+            }
+
+            // ── 3. Winnings Balance Card ──────────────────────────────────────
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceCard,
+                border = BorderStroke(1.dp, GreenSuccess.copy(alpha = 0.3f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("🏆", fontSize = 18.sp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Winnings",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = fmtMoney(user.winningsBalance),
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = GreenSuccess
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "✅ Withdrawable anytime",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = GreenSuccess
+                        )
+                    }
+                }
+            }
+
             // ── Primary Actions ─────────────────────────────────────────────
+            val canWithdraw = user.winningsBalance > 0
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = if (canWithdraw) 16.dp else 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 ArenaButton(
@@ -135,11 +220,31 @@ fun WalletScreen(
                     onClick = { onNavigate("deposit") },
                     modifier = Modifier.weight(1f)
                 )
-                ArenaGhostButton(
-                    text = "Withdraw",
+                Button(
                     onClick = { onNavigate("withdraw") },
-                    modifier = Modifier.weight(1f)
+                    enabled = canWithdraw,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF5B7FFF),
+                        disabledContainerColor = Color(0xFF1F2835),
+                        disabledContentColor = TextMuted
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                ) {
+                    Text("Withdraw", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
+            }
+
+            if (!canWithdraw) {
+                Text(
+                    text = "💡 Withdrawal is only available from winnings. Play and win to withdraw!",
+                    fontSize = 11.sp,
+                    color = TextMuted,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                 )
+                Spacer(modifier = Modifier.height(12.dp))
             }
 
             // ── Real-time Withdrawal Status Banner ──────────────────────────

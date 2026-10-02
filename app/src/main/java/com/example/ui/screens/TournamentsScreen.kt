@@ -31,6 +31,9 @@ import java.util.*
 fun TournamentsScreen(
     tournaments: List<TournamentLiveDto>,
     isLoading: Boolean,
+    joinedTournamentIds: Set<String> = emptySet(),
+    joiningTournamentId: String? = null,
+    onJoinTournament: (String) -> Unit = {},
     onRefresh: () -> Unit,
     onStartAutoRefresh: () -> Unit,
     onStopAutoRefresh: () -> Unit,
@@ -128,7 +131,13 @@ fun TournamentsScreen(
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(tournaments, key = { it.id }) { t ->
-                    TournamentLiveCard(t = t, currentTimeMs = currentTimeMs)
+                    TournamentLiveCard(
+                        t = t,
+                        currentTimeMs = currentTimeMs,
+                        alreadyJoined = joinedTournamentIds.contains(t.id),
+                        joining = joiningTournamentId == t.id,
+                        onJoin = { onJoinTournament(t.id) }
+                    )
                 }
             }
         }
@@ -136,7 +145,13 @@ fun TournamentsScreen(
 }
 
 @Composable
-fun TournamentLiveCard(t: TournamentLiveDto, currentTimeMs: Long) {
+fun TournamentLiveCard(
+    t: TournamentLiveDto,
+    currentTimeMs: Long,
+    alreadyJoined: Boolean = false,
+    joining: Boolean = false,
+    onJoin: () -> Unit = {}
+) {
     val startMs = remember(t.startTime) { parseIsoToMillis(t.startTime) }
     val endMs = remember(t.endTime) { parseIsoToMillis(t.endTime) }
 
@@ -156,6 +171,9 @@ fun TournamentLiveCard(t: TournamentLiveDto, currentTimeMs: Long) {
     }
 
     val isLive = startMs != null && currentTimeMs >= startMs && (endMs == null || currentTimeMs < endMs)
+    val statusClean = (t.status ?: "").uppercase()
+    val canJoin = (statusClean == "UPCOMING" || statusClean == "LIVE" || isLive) && (endMs == null || currentTimeMs < endMs) && !alreadyJoined
+    val entryFeeVal = t.entryFee?.toInt() ?: 0
 
     Surface(
         shape = RoundedCornerShape(18.dp),
@@ -200,7 +218,7 @@ fun TournamentLiveCard(t: TournamentLiveDto, currentTimeMs: Long) {
             ) {
                 Column {
                     Text("ENTRY FEE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
-                    Text("₹${t.entryFee?.toInt() ?: 0}", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("₹$entryFeeVal", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("PLAYERS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
@@ -241,25 +259,74 @@ fun TournamentLiveCard(t: TournamentLiveDto, currentTimeMs: Long) {
 
             Spacer(Modifier.height(14.dp))
 
-            // Action button (Disabled - Join coming soon)
-            // TODO(server): join_tournament RPC
-            Button(
-                onClick = { /* Join tournament disabled in this phase */ },
-                enabled = false,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = SurfaceDark,
-                    disabledContentColor = TextMuted
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-            ) {
-                Text(
-                    text = "Join coming soon",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold
-                )
+            // Action Button
+            if (canJoin) {
+                Button(
+                    onClick = onJoin,
+                    enabled = !joining,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF36D399)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    if (joining) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = BgDark,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = "🎯 JOIN (₹$entryFeeVal)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Black,
+                            color = BgDark
+                        )
+                    }
+                }
+            } else if (alreadyJoined) {
+                Button(
+                    onClick = {},
+                    enabled = false,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = GreenSuccess.copy(alpha = 0.20f),
+                        disabledContentColor = GreenSuccess
+                    ),
+                    border = BorderStroke(1.dp, GreenSuccess.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                ) {
+                    Text(
+                        text = "✅ JOINED",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = GreenSuccess
+                    )
+                }
+            } else {
+                Button(
+                    onClick = {},
+                    enabled = false,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        disabledContainerColor = SurfaceDark,
+                        disabledContentColor = TextMuted
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                ) {
+                    Text(
+                        text = if (endMs != null && currentTimeMs >= endMs) "Tournament Ended" else "Registration Closed",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

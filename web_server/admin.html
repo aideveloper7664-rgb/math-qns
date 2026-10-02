@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Baazi - Admin Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg-dark: #0b111e;
+      --card-bg: #1e293b;
+      --card-border: rgba(255, 255, 255, 0.08);
+      --accent-blue: #5B7FFF;
+      --accent-green: #36D399;
+      --accent-gold: #fbbf24;
+      --text-faint: #94a3b8;
+    }
+    body {
+      background-color: var(--bg-dark);
+      color: #f8fafc;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .card {
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+    }
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+    }
+    .badge-approved { background: rgba(54, 211, 153, 0.15); color: #36D399; border: 1px solid rgba(54, 211, 153, 0.4); }
+    .badge-pending { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.4); }
+    .badge-failed { background: rgba(245, 98, 115, 0.15); color: #f56273; border: 1px solid rgba(245, 98, 115, 0.4); }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 11px; font-weight: 700; color: var(--text-faint); padding: 12px 16px; border-bottom: 1px solid var(--card-border); text-transform: uppercase; }
+    td { padding: 12px 16px; border-bottom: 1px solid var(--card-border); font-size: 13px; }
+  </style>
+</head>
+<body class="min-h-screen pb-12">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800 bg-[#0b111e]/90 backdrop-blur sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-black text-xl">
+        M
+      </div>
+      <div>
+        <h1 class="text-lg font-black text-white">Math Baazi Admin</h1>
+        <p class="text-xs text-slate-400">Management & Audit Panel</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-3" id="admin-status">
+      <span class="text-xs text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/50 px-3 py-1 rounded-full">⚡ Live Sync Active</span>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-6 pt-6 space-y-8">
+
+    <!-- Stats Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="card p-5">
+        <p class="text-xs text-slate-400 font-bold uppercase">Total Users</p>
+        <p class="text-2xl font-black text-white mt-1" id="stat-users">0</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs text-slate-400 font-bold uppercase">Total Deposit Balance</p>
+        <p class="text-2xl font-black text-[#5B7FFF] mt-1" id="stat-deposits">₹0.00</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs text-slate-400 font-bold uppercase">Total Winnings Balance</p>
+        <p class="text-2xl font-black text-[#36D399] mt-1" id="stat-winnings">₹0.00</p>
+      </div>
+      <div class="card p-5">
+        <p class="text-xs text-slate-400 font-bold uppercase">Pending Withdrawals</p>
+        <p class="text-2xl font-black text-amber-400 mt-1" id="stat-pending-wd">0</p>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
+      <button onclick="switchTab('users')" id="tab-btn-users" class="px-4 py-2 rounded-xl text-xs font-extrabold bg-slate-800 text-white border border-slate-700">👥 Users</button>
+      <button onclick="switchTab('withdrawals')" id="tab-btn-withdrawals" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-400 hover:text-white">💸 Withdrawals</button>
+      <button onclick="switchTab('knockouts')" id="tab-btn-knockouts" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-400 hover:text-white">🥊 Knockouts</button>
+      <button onclick="switchTab('vipplans')" id="tab-btn-vipplans" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-400 hover:text-white">💎 VIP Plans</button>
+      <button onclick="switchTab('promotions')" id="tab-btn-promotions" class="px-4 py-2 rounded-xl text-xs font-extrabold text-slate-400 hover:text-white">📢 Promotions</button>
+    </div>
+
+    <!-- Section: Users -->
+    <section id="section-users" class="card overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="font-extrabold text-white text-base">User Directory & Balance Audit</h3>
+        <button onclick="loadUsers()" class="text-xs text-cyan-400 font-bold hover:underline">🔄 Refresh Users</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Total Wallet</th>
+              <th>💳 Deposit Balance</th>
+              <th>🏆 Winnings Balance</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="5" class="text-center py-6 text-slate-500">Loading users...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Section: Withdrawals -->
+    <section id="section-withdrawals" class="card overflow-hidden hidden">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="font-extrabold text-white text-base">Withdrawal Requests & Verification</h3>
+        <button onclick="loadWithdrawals()" class="text-xs text-cyan-400 font-bold hover:underline">🔄 Refresh Requests</button>
+      </div>
+      <div class="p-4 space-y-4" id="withdrawals-list">
+        <div class="text-center py-6 text-slate-500">Loading withdrawal requests...</div>
+      </div>
+    </section>
+
+    <!-- Section: Knockouts -->
+    <section id="section-knockouts" class="card overflow-hidden hidden p-6 space-y-4">
+      <h3 class="font-extrabold text-white text-base">Knockout Tournaments Management</h3>
+      <p class="text-xs text-slate-400">Configure bot fill enabled and difficulty settings for upcoming tournaments.</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+          <p class="text-xs font-bold text-slate-300">Bot Fill Toggle</p>
+          <label class="flex items-center gap-2 text-xs text-slate-300">
+            <input type="checkbox" id="kf-bot-enabled" checked class="rounded text-cyan-500" />
+            <span>Enable Automatic Opponent Fill for Odd Slots</span>
+          </label>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-3">
+          <p class="text-xs font-bold text-slate-300">Bot Difficulty Preset</p>
+          <select id="kf-bot-diff" class="w-full bg-slate-800 border border-slate-700 text-white rounded-lg p-2 text-xs">
+            <option value="easy">🟢 Easy (50% accuracy)</option>
+            <option value="medium" selected>🟡 Medium (70% accuracy)</option>
+            <option value="hard">🔴 Hard (90% accuracy)</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const SUPABASE_URL = 'https://iwvauaueteocwsyuoioz.supabase.co';
+    const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml3dmF1YXVldGVvY3dzeXVvaW96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI5NTg4ODMsImV4cCI6MjA1ODUzNDg4M30.34_9Y4iF5fK6zF0W1zS-e3Q-yK5K1Z_v7Z9eZ3Q';
+    const supabase = window.supabase ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+        storage: window.localStorage,
+        flowType: 'pkce'
+      }
+    }) : null;
+
+    document.addEventListener('visibilitychange', async () => {
+      if (!document.hidden && supabase) {
+        try {
+          await supabase.auth.getSession();
+        } catch (_) {}
+      }
+    });
+
+    function fmt(num) {
+      return '₹' + Number(num || 0).toFixed(2);
+    }
+
+    function switchTab(tab) {
+      ['users', 'withdrawals', 'knockouts'].forEach(t => {
+        document.getElementById('section-' + t).classList.add('hidden');
+        const btn = document.getElementById('tab-btn-' + t);
+        btn.classList.remove('bg-slate-800', 'text-white', 'border', 'border-slate-700');
+        btn.classList.add('text-slate-400');
+      });
+      document.getElementById('section-' + tab).classList.remove('hidden');
+      const activeBtn = document.getElementById('tab-btn-' + tab);
+      activeBtn.classList.add('bg-slate-800', 'text-white', 'border', 'border-slate-700');
+      activeBtn.classList.remove('text-slate-400');
+
+      if (tab === 'users') loadUsers();
+      if (tab === 'withdrawals') loadWithdrawals();
+    }
+
+    async function loadUsers() {
+      if (!supabase) return;
+      const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+      if (error) return;
+
+      let totalDep = 0;
+      let totalWin = 0;
+
+      const tbody = document.getElementById('users-tbody');
+      tbody.innerHTML = (data || []).map(u => {
+        const dep = u.deposit_balance || 0;
+        const win = u.winnings_balance || 0;
+        totalDep += dep;
+        totalWin += win;
+
+        return `
+          <tr>
+            <td>
+              <div class="font-bold text-white">${u.display_name || 'User'}</div>
+              <div class="text-[11px] text-slate-400">${u.email || ''}</div>
+            </td>
+            <td class="font-extrabold text-white">${fmt(u.wallet_balance)}</td>
+            <td><span class="font-bold text-[#5B7FFF]">${fmt(dep)}</span></td>
+            <td><span class="font-bold text-[#36D399]">${fmt(win)}</span></td>
+            <td><span class="badge ${u.status === 'banned' ? 'badge-failed' : 'badge-approved'}">${u.status || 'active'}</span></td>
+          </tr>
+        `;
+      }).join('');
+
+      document.getElementById('stat-users').innerText = data.length;
+      document.getElementById('stat-deposits').innerText = fmt(totalDep);
+      document.getElementById('stat-winnings').innerText = fmt(totalWin);
+    }
+
+    async function loadWithdrawals() {
+      if (!supabase) return;
+      const { data: wList, error } = await supabase.from('withdrawals').select('*, users(*)').order('created_at', { ascending: false });
+      if (error) return;
+
+      const container = document.getElementById('withdrawals-list');
+      let pendingCount = 0;
+
+      if (!wList || wList.length === 0) {
+        container.innerHTML = '<div class="text-center py-6 text-slate-500">No withdrawal requests found.</div>';
+        return;
+      }
+
+      container.innerHTML = wList.map(w => {
+        if (w.status === 'PENDING') pendingCount++;
+        const user = w.users || {};
+        const winBal = user.winnings_balance || 0;
+        const canApprove = winBal >= w.amount;
+
+        return `
+          <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-white text-base">${fmt(w.amount)}</span>
+                <span class="badge ${w.status === 'APPROVED' ? 'badge-approved' : w.status === 'PENDING' ? 'badge-pending' : 'badge-failed'}">${w.status}</span>
+              </div>
+              <div class="text-xs text-slate-400 mt-1">
+                User: <strong class="text-slate-200">${user.display_name || user.email || w.user_id}</strong> • 
+                UPI: <span class="font-mono text-cyan-400">${w.account_reference || w.gateway_or_account || 'UPI'}</span>
+              </div>
+              <div class="text-xs mt-1">
+                User Winnings: <strong class="${winBal >= w.amount ? 'text-emerald-400' : 'text-rose-400'}">${fmt(winBal)}</strong>
+                ${!canApprove ? '<span class="text-rose-400 font-bold ml-2">⚠️ Insufficient winnings balance (Cannot approve)</span>' : ''}
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              ${w.status === 'PENDING' ? `
+                <button onclick="approveWithdrawal('${w.id}')" ${canApprove ? '' : 'disabled title="Insufficient winnings balance"'} class="px-3 py-1.5 rounded-lg text-xs font-bold ${canApprove ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-slate-800 text-slate-600 cursor-not-allowed'}">
+                  ✓ Approve
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('stat-pending-wd').innerText = pendingCount;
+    }
+
+    async function approveWithdrawal(id) {
+      if (!supabase) return;
+      const { error } = await supabase.rpc('approve_withdrawal', { p_id: id });
+      if (error) {
+        alert('Approval failed: ' + error.message);
+      } else {
+        alert('Withdrawal approved successfully!');
+        loadWithdrawals();
+      }
+    }
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadUsers();
+      if (window.lucide) window.lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

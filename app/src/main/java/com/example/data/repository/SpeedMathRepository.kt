@@ -520,6 +520,8 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             mmr = dto.mmr ?: 1000,
             xp = dto.xp ?: 0,
             walletBalance = dto.walletBalance ?: 0.0,
+            depositBalance = dto.depositBalance ?: 0.0,
+            winningsBalance = dto.winningsBalance ?: 0.0,
             lockedBalance = dto.lockedBalance ?: 0.0,
             matchesPlayed = dto.matchesPlayed ?: 0,
             wins = dto.wins ?: 0,
@@ -897,14 +899,11 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         }
     }
 
-    suspend fun fetchLiveTournaments(nowIsoUtc: String? = null): RpcResult<List<TournamentLiveDto>> = withContext(Dispatchers.IO) {
+    suspend fun fetchLiveTournaments(): RpcResult<List<TournamentLiveDto>> = withContext(Dispatchers.IO) {
         try {
-            val nowStr = nowIsoUtc ?: SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
-                timeZone = java.util.TimeZone.getTimeZone("UTC")
-            }.format(java.util.Date())
-            val orFilter = "(end_time.is.null,end_time.gte.$nowStr)"
-            val res = SupabaseClient.restApi.getLiveTournaments(or = orFilter)
+            val res = SupabaseClient.restApi.getLiveTournaments(status = "neq.CANCELLED")
             if (res.isSuccessful && res.body() != null) {
+                Log.d("Tournaments", "Loaded ${res.body()!!.size} tournaments")
                 RpcResult.Ok(res.body()!!)
             } else {
                 val eb = res.errorBody()?.string() ?: ""
@@ -916,6 +915,25 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         } catch (e: Exception) {
             Log.e("Tournaments", "fetchLiveTournaments error", e)
             RpcResult.Err(e.message ?: "Failed to load tournaments")
+        }
+    }
+
+    suspend fun fetchKnockoutTournaments(): RpcResult<List<KnockoutTournamentDto>> = withContext(Dispatchers.IO) {
+        try {
+            val res = SupabaseClient.restApi.getKnockoutTournaments(status = "neq.CANCELLED")
+            if (res.isSuccessful && res.body() != null) {
+                Log.d("Knockouts", "Loaded ${res.body()!!.size} knockout tournaments")
+                RpcResult.Ok(res.body()!!)
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("Knockouts", "fetchKnockoutTournaments code=${res.code()} body=$eb")
+                RpcResult.Err("Failed to load knockout tournaments (${res.code()})", res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Knockouts", "fetchKnockoutTournaments error", e)
+            RpcResult.Err(e.message ?: "Failed to load knockout tournaments")
         }
     }
 
@@ -954,6 +972,80 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         } catch (e: Exception) {
             Log.e("Knockout", "fetchKnockoutParticipants error", e)
             RpcResult.Err(e.message ?: "Failed to load participants")
+        }
+    }
+
+    suspend fun joinKnockoutTournament(tournamentId: String): RpcResult<JoinKnockoutResponse> = withContext(Dispatchers.IO) {
+        try {
+            val body = mapOf("p_tournament_id" to tournamentId)
+            val res = SupabaseClient.restApi.joinKnockoutTournamentRpc(body)
+            if (res.isSuccessful && res.body() != null) {
+                val b = res.body()!!
+                if (b.success) {
+                    RpcResult.Ok(b)
+                } else {
+                    RpcResult.Err(b.error ?: b.message ?: "Failed to join tournament")
+                }
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("Knockout", "joinKnockoutTournament code=${res.code()} body=$eb")
+                val errMsg = try {
+                    val j = org.json.JSONObject(eb)
+                    j.optString("message", j.optString("error", "Join failed (${res.code()})"))
+                } catch (_: Exception) {
+                    "Join failed (${res.code()})"
+                }
+                RpcResult.Err(errMsg, res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Knockout", "joinKnockoutTournament error", e)
+            RpcResult.Err(e.message ?: "Network error")
+        }
+    }
+
+    suspend fun joinLiveTournament(tournamentId: String): RpcResult<JoinKnockoutResponse> = withContext(Dispatchers.IO) {
+        try {
+            val body = mapOf("p_tournament_id" to tournamentId)
+            val res = SupabaseClient.restApi.joinTournamentRpc(body)
+            if (res.isSuccessful && res.body() != null) {
+                val b = res.body()!!
+                if (b.success) {
+                    RpcResult.Ok(b)
+                } else {
+                    RpcResult.Err(b.error ?: b.message ?: "Failed to join tournament")
+                }
+            } else {
+                val eb = res.errorBody()?.string() ?: ""
+                Log.e("Tournaments", "joinLiveTournament code=${res.code()} body=$eb")
+                val errMsg = try {
+                    val j = org.json.JSONObject(eb)
+                    j.optString("message", j.optString("error", "Join failed (${res.code()})"))
+                } catch (_: Exception) {
+                    "Join failed (${res.code()})"
+                }
+                RpcResult.Err(errMsg, res.code())
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e("Tournaments", "joinLiveTournament error", e)
+            RpcResult.Err(e.message ?: "Network error")
+        }
+    }
+
+    suspend fun fetchUserJoinedKnockoutIds(userId: String): Set<String> = withContext(Dispatchers.IO) {
+        try {
+            val userFilter = if (userId.startsWith("eq.")) userId else "eq.$userId"
+            val res = SupabaseClient.restApi.getUserKnockoutParticipants(userQuery = userFilter)
+            if (res.isSuccessful && res.body() != null) {
+                res.body()!!.mapNotNull { it.tournamentId }.toSet()
+            } else {
+                emptySet()
+            }
+        } catch (_: Exception) {
+            emptySet()
         }
     }
 

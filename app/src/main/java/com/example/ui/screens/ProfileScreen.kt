@@ -165,21 +165,11 @@ fun ProfileScreen(
                     ) {
                         // Avatar with ring & optional edit icon
                         Box(contentAlignment = Alignment.BottomEnd) {
-                            if (!user.photoUrl.isNullOrBlank() && user.photoUrl!!.length <= 3) {
-                                // Emoji avatar
-                                Box(
-                                    modifier = Modifier
-                                        .size(80.dp)
-                                        .clip(CircleShape)
-                                        .background(Brush.linearGradient(listOf(CyanPrimary, BlueSecondary)))
-                                        .border(2.dp, CyanPrimary, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(text = user.photoUrl!!, fontSize = 38.sp)
-                                }
-                            } else {
-                                AvatarCircle(displayName = user.displayName, size = 80.dp, fontSize = 32)
-                            }
+                            RemoteAvatar(
+                                url = user.photoUrl,
+                                displayName = user.displayName,
+                                size = 80.dp
+                            )
 
                             Surface(
                                 shape = CircleShape,
@@ -592,8 +582,14 @@ fun ProfileScreen(
             // ── Menu Links ──────────────────────────────────────────────────
             ArenaCard(modifier = Modifier.padding(bottom = 20.dp)) {
                 val menu = listOf(
-                    Triple("transactions", "Match & Wallet History", "📜"),
+                    Triple("vip", "VIP Pass & Membership", "👑"),
+                    Triple("knockout", "Knockout Tournaments", "🥊"),
+                    Triple("tournaments", "Live Tournaments", "⚔️"),
+                    Triple("practice", "Practice Mode (Free Play)", "🎯"),
+                    Triple("game_history", "Game Match History", "🎮"),
+                    Triple("transactions", "Wallet Transactions", "📜"),
                     Triple("badges", "Badges & Achievements", "🏅"),
+                    Triple("policies", "Policies & Terms", "📋"),
                     Triple("leaderboard", "Global Leaderboard", "🏆"),
                     Triple("settings", "Account & Settings", "⚙️")
                 )
@@ -655,9 +651,67 @@ fun ProfileScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
 
+                    // ── Gallery Photo Upload Button ──
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = SurfaceDark,
+                        border = BorderStroke(1.dp, CyanPrimary.copy(alpha = 0.4f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !photoUploading) {
+                                photoLauncher.launch("image/*")
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (photoUploading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    color = CyanPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    text = "Uploading Photo...",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyanPrimary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoCamera,
+                                    contentDescription = "Upload Photo",
+                                    tint = CyanPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Choose Photo from Gallery",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyanPrimary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "OR CHOOSE AN EMOJI",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMuted,
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
                     ) {
                         items(avatarPresets) { emo ->
                             val isSelected = editPhoto == emo
@@ -680,23 +734,6 @@ fun ProfileScreen(
                         value = editName,
                         onValueChange = { editName = it },
                         label = { Text("Display Name", color = TextMuted) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyanPrimary,
-                            unfocusedBorderColor = BorderSubtle,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = if (avatarPresets.contains(editPhoto)) "" else editPhoto,
-                        onValueChange = { editPhoto = it },
-                        label = { Text("Custom Photo URL (optional)", color = TextMuted) },
-                        placeholder = { Text("https://...", color = TextMuted.copy(alpha = 0.5f)) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = CyanPrimary,

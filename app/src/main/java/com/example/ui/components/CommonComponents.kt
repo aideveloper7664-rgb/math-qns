@@ -60,6 +60,28 @@ fun rankColor(rank: String): Color {
 }
 
 @Composable
+fun RuleBullet(num: String, text: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(CyanPrimary.copy(alpha = 0.2f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(num, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = CyanPrimary)
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(text, fontSize = 12.sp, color = TextMuted, lineHeight = 16.sp)
+    }
+}
+
+@Composable
 fun RankBadge(rank: String, modifier: Modifier = Modifier) {
     val color = rankColor(rank)
     Surface(

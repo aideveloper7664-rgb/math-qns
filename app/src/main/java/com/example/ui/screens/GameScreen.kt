@@ -279,6 +279,7 @@ fun GameScreen(
                 locked = state.isLocked,
                 onClick = {
                     if (!state.isLocked) {
+                        android.util.Log.d("Game", "User clicked: $key")
                         onAnswer(key)
                     }
                 }

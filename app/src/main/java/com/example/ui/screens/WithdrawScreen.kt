@@ -42,9 +42,11 @@ fun WithdrawScreen(
     var amountText by remember { mutableStateOf("") }
     var errorMsg by remember { mutableStateOf<String?>(null) }
 
+    val winnings = user.winningsBalance
+    val depositBalance = user.depositBalance
     val walletBalance = user.walletBalance
     val pendingSum = withdrawals.filter { it.status.equals("PENDING", ignoreCase = true) }.sumOf { it.amount }
-    val availableToWithdraw = (walletBalance - pendingSum).coerceAtLeast(0.0)
+    val availableToWithdraw = (winnings - pendingSum).coerceAtLeast(0.0)
 
     val amt = amountText.toDoubleOrNull() ?: 0.0
     val isOverAvailable = amt > availableToWithdraw && amt > 0
@@ -74,13 +76,28 @@ fun WithdrawScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Wallet Balance", fontSize = 12.sp, color = TextMuted)
+                Text("🏆 Winnings (withdrawable)", fontSize = 12.sp, color = TextMuted)
                 Text(
-                    text = "₹${"%.2f".format(walletBalance)}",
+                    text = "₹${"%.2f".format(winnings)}",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+                    color = GreenSuccess
                 )
+            }
+            if (depositBalance > 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("💳 Deposit (locked)", fontSize = 12.sp, color = TextMuted)
+                    Text(
+                        text = "₹${"%.2f".format(depositBalance)}",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF5B7FFF)
+                    )
+                }
             }
             if (pendingSum > 0) {
                 Row(
@@ -144,7 +161,7 @@ fun WithdrawScreen(
             if (isOverAvailable) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "❌ Insufficient balance (Available: ₹${"%.2f".format(availableToWithdraw)})",
+                    text = "❌ Max ₹${"%.2f".format(availableToWithdraw)} (winnings only)",
                     color = RedError,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold
