@@ -589,6 +589,7 @@ fun ProfileScreen(
                     Triple("game_history", "Game Match History", "🎮"),
                     Triple("transactions", "Wallet Transactions", "📜"),
                     Triple("badges", "Badges & Achievements", "🏅"),
+                    Triple("support", "Help & Support", "💬"),
                     Triple("policies", "Policies & Terms", "📋"),
                     Triple("leaderboard", "Global Leaderboard", "🏆"),
                     Triple("settings", "Account & Settings", "⚙️")

@@ -78,6 +78,8 @@ class MainActivity : ComponentActivity() {
                 val joinedKnockoutIds by viewModel.joinedKnockoutIds.collectAsStateWithLifecycle()
                 val knockoutJoiningId by viewModel.knockoutJoiningId.collectAsStateWithLifecycle()
 
+                val supportConfig by viewModel.supportConfig.collectAsStateWithLifecycle()
+
                 val appUpdateConfig by viewModel.appUpdateConfig.collectAsStateWithLifecycle()
                 val homeButtonsConfig by viewModel.homeButtonsConfig.collectAsStateWithLifecycle()
                 val activeAnnouncements by viewModel.activeAnnouncements.collectAsStateWithLifecycle()
@@ -250,7 +252,7 @@ class MainActivity : ComponentActivity() {
                                         user = currentUser,
                                         transactions = userTransactions,
                                         onNavigate = { target -> currentRoute = target },
-                                        onRefreshWithdrawals = { viewModel.syncWithdrawals() }
+                                        onRefreshWithdrawals = { viewModel.syncWithdrawals(silent = true) }
                                     )
 
                                     "deposit", "add_money" -> AddMoneyScreen(
@@ -299,7 +301,7 @@ class MainActivity : ComponentActivity() {
                                                 onResult(success)
                                             }
                                         },
-                                        onRefreshWithdrawals = { viewModel.syncWithdrawals() },
+                                        onRefreshWithdrawals = { viewModel.syncWithdrawals(silent = false) },
                                         onBack = { currentRoute = "wallet" }
                                     )
 
@@ -352,6 +354,11 @@ class MainActivity : ComponentActivity() {
 
                                     "practice" -> PracticeScreen(
                                         onBack = { currentRoute = "home" }
+                                    )
+
+                                    "support" -> com.example.ui.screens.SupportScreen(
+                                        config = supportConfig,
+                                        onBack = { currentRoute = "profile" }
                                     )
 
                                     "policies" -> PoliciesScreen(

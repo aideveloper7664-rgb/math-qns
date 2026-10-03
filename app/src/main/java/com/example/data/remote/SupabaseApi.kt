@@ -223,7 +223,7 @@ interface SupabaseRestApi {
     @GET("rest/v1/game_config")
     suspend fun getGameConfig(
         @Query("select") select: String = "key,value",
-        @Query("key") key: String = "in.(popup_settings,game_rewards,wallet_config,app_version,home_buttons)"
+        @Query("key") key: String = "in.(popup_settings,game_rewards,wallet_config,app_version,home_buttons,support)"
     ): Response<List<GameConfigRow>>
 
     @GET("rest/v1/v_game_history")

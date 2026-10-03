@@ -124,6 +124,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
 
     val appUpdateConfig = MutableStateFlow<AppUpdateConfig?>(null)
     val homeButtonsConfig = MutableStateFlow(HomeButtonsUi())
+    val supportConfig = MutableStateFlow<Map<String, String>>(emptyMap())
     val activeAnnouncements = MutableStateFlow<List<SupabaseAnnouncementDto>>(emptyList())
 
     private val _showPlayConfirm = MutableStateFlow(false)
@@ -336,6 +337,11 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                                         appUpdateConfig.value = AppUpdateConfig(latest, url, force)
                                     }
                                 }
+                            }
+                            "support" -> {
+                                supportConfig.value = map.mapNotNull { (k, v) ->
+                                    (v as? String)?.takeIf { it.isNotBlank() }?.let { k to it }
+                                }.toMap()
                             }
                             "home_buttons" -> {
                                 val curButtons = homeButtonsConfig.value
@@ -959,13 +965,13 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun syncWithdrawals() {
+    fun syncWithdrawals(silent: Boolean = true) {
         val userId = currentUserId.value ?: return
         viewModelScope.launch {
             try {
                 repository.syncUserWithdrawals(userId)
                 refreshUserData(userId)
-                _toastEvent.emit(ToastEvent.Show("Withdrawal status refreshed."))
+                if (!silent) _toastEvent.emit(ToastEvent.Show("Withdrawal status refreshed."))
                 startWithdrawalWatcher()
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

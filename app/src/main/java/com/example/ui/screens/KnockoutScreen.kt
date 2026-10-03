@@ -182,11 +182,12 @@ fun KnockoutScreen(
                             ) {
                                 Column {
                                     Text("ENTRY FEE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                                    val koFee = kt.entryFee?.toInt() ?: 0
                                     Text(
-                                        text = "₹${kt.entryFee?.toInt() ?: 0}",
+                                        text = if (koFee == 0) "🎁 FREE" else "₹$koFee",
                                         fontSize = 15.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = TextPrimary
+                                        color = if (koFee == 0) GreenSuccess else TextPrimary
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -259,7 +260,7 @@ fun KnockoutScreen(
                                                 )
                                             } else {
                                                 Text(
-                                                    text = "🎯 JOIN (₹$entryFeeVal)",
+                                                    text = if (entryFeeVal == 0) "🎯 JOIN FREE" else "🎯 JOIN (₹$entryFeeVal)",
                                                     fontWeight = FontWeight.Black,
                                                     fontSize = 15.sp,
                                                     color = BgDark

@@ -39,7 +39,10 @@ fun WalletScreen(
     if (user == null) return
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        onRefreshWithdrawals()
+        while (true) {
+            onRefreshWithdrawals()
+            kotlinx.coroutines.delay(10_000L)
+        }
     }
 
     val pendingWithdrawalsSum = transactions.filter { it.type.equals("withdrawal", ignoreCase = true) && it.status.equals("PENDING", ignoreCase = true) }.sumOf { it.amount }

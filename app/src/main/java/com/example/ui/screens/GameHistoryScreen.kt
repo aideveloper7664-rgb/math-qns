@@ -191,11 +191,12 @@ fun GameHistoryCard(item: GameHistoryItem) {
                 }
 
                 // Net wallet impact
-                val isPositive = item.walletImpact >= 0
+                val net = item.prizeEarned + (item.refundAmount ?: 0.0) - item.entryFee
+                val isPositive = net >= 0
                 val netStr = if (isPositive) {
-                    "+₹${"%.2f".format(item.walletImpact)}"
+                    "+₹${"%.2f".format(net)}"
                 } else {
-                    "-₹${"%.2f".format(kotlin.math.abs(item.walletImpact))}"
+                    "-₹${"%.2f".format(kotlin.math.abs(net))}"
                 }
                 Surface(
                     shape = RoundedCornerShape(8.dp),

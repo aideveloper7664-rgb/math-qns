@@ -376,7 +376,8 @@ data class TournamentLiveDto(
     @Json(name = "max_players") val maxPlayers: Int? = 0,
     @Json(name = "start_time") val startTime: String? = null,
     @Json(name = "end_time") val endTime: String? = null,
-    @Json(name = "type") val type: String? = null
+    @Json(name = "type") val type: String? = null,
+    @Json(name = "prize_distribution") val prizeDistribution: Map<String, Any?>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -394,7 +395,8 @@ data class KnockoutTournamentDto(
     @Json(name = "winner_id") val winnerId: String? = null,
     @Json(name = "created_at") val createdAt: String? = null,
     @Json(name = "bot_fill_enabled") val botFillEnabled: Boolean = true,
-    @Json(name = "bot_difficulty") val botDifficulty: String = "medium"
+    @Json(name = "bot_difficulty") val botDifficulty: String = "medium",
+    @Json(name = "prize_distribution") val prizeDistribution: Map<String, Any?>? = null
 )
 
 @JsonClass(generateAdapter = true)

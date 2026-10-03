@@ -233,6 +233,7 @@ fun TournamentLiveCard(
                     Text("₹${t.prizePool?.toInt() ?: 0}", fontSize = 16.sp, fontWeight = FontWeight.Black, color = GoldAccent)
                 }
             }
+            com.example.ui.components.PrizeRow(t.prizeDistribution, Modifier.padding(top = 8.dp))
 
             Spacer(Modifier.height(10.dp))
 
