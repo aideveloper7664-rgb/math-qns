@@ -56,13 +56,6 @@ interface SupabaseRestApi {
         @Body updates: Map<String, @JvmSuppressWildcards Any?>
     ): Response<List<SupabaseUserDto>>
 
-    // Questions
-    @GET("rest/v1/questions")
-    suspend fun getQuestions(
-        @Query("select") select: String = "*",
-        @Query("limit") limit: Int = 100
-    ): Response<List<SupabaseQuestionDto>>
-
     // Tournaments
     @GET("rest/v1/tournaments")
     suspend fun getTournaments(
@@ -95,6 +88,7 @@ interface SupabaseRestApi {
     @GET("rest/v1/notifications")
     suspend fun getNotifications(
         @Query("select") select: String = "*",
+        @Query("or") orQuery: String? = null,
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 50
     ): Response<List<SupabaseNotificationDto>>
@@ -182,10 +176,11 @@ interface SupabaseRestApi {
     ): Response<Unit>
 
 
-    @POST("rest/v1/match_participants")
-    suspend fun postMatchParticipant(
-        @Body participant: SupabaseMatchParticipantDto
-    ): Response<Unit>
+    @GET("rest/v1/tournament_participants")
+    suspend fun getUserTournamentParticipants(
+        @Query("select") select: String = "tournament_id",
+        @Query("user_id") userQuery: String
+    ): Response<List<Map<String, String>>>
 
     @GET("rest/v1/app_settings")
     suspend fun getAppSettings(
@@ -220,18 +215,6 @@ interface SupabaseRestApi {
         @Query("limit") limit: Int = 30
     ): Response<List<GameSessionDto>>
 
-    @PATCH("rest/v1/game_sessions")
-    suspend fun updateGameSession(
-        @Query("id") idQuery: String,
-        @Header("Prefer") prefer: String = "return=representation",
-        @Body body: Map<String, @JvmSuppressWildcards Any?>
-    ): Response<List<GameSessionDto>>
-
-    @POST("rest/v1/game_session_questions")
-    suspend fun insertSessionQuestion(
-        @Body body: Map<String, @JvmSuppressWildcards Any?>
-    ): Response<Unit>
-
     @POST("rest/v1/rpc/get_leaderboard")
     suspend fun getLeaderboardRpc(
         @Body body: Map<String, @JvmSuppressWildcards Any>
@@ -240,7 +223,7 @@ interface SupabaseRestApi {
     @GET("rest/v1/game_config")
     suspend fun getGameConfig(
         @Query("select") select: String = "key,value",
-        @Query("key") key: String = "in.(popup_settings,game_rewards,wallet_config)"
+        @Query("key") key: String = "in.(popup_settings,game_rewards,wallet_config,app_version,home_buttons)"
     ): Response<List<GameConfigRow>>
 
     @GET("rest/v1/v_game_history")

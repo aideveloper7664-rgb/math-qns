@@ -41,6 +41,19 @@ data class GameState(
     val refundAmount: Double = 0.0
 )
 
+data class AppUpdateConfig(
+    val latestVersion: String,
+    val downloadUrl: String,
+    val forceUpdate: Boolean = false
+)
+
+data class HomeButtonsUi(
+    val startGameText: String = "⚡ PLAY SPEED MATH",
+    val startGameSubtext: String = "Compete live & win real cash",
+    val practiceText: String = "🎯 PRACTICE MODE",
+    val practiceSubtext: String = "Free unlimited practice"
+)
+
 data class GameConfigUi(
     val entryFee: Double = 10.0,
     val showPlayConfirm: Boolean = true,
@@ -108,6 +121,10 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
 
     private val _gameConfig = MutableStateFlow(GameConfigUi())
     val gameConfig: StateFlow<GameConfigUi> = _gameConfig.asStateFlow()
+
+    val appUpdateConfig = MutableStateFlow<AppUpdateConfig?>(null)
+    val homeButtonsConfig = MutableStateFlow(HomeButtonsUi())
+    val activeAnnouncements = MutableStateFlow<List<SupabaseAnnouncementDto>>(emptyList())
 
     private val _showPlayConfirm = MutableStateFlow(false)
     val showPlayConfirm: StateFlow<Boolean> = _showPlayConfirm.asStateFlow()
@@ -220,11 +237,56 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
             currentUserId.value = sessionUserId
             refreshUserData(sessionUserId)
             refreshRecentSessions(sessionUserId)
+            loadUserJoinedTournaments()
         }
         loadGameConfig()
         loadVipPlans()
         loadLiveTournaments()
         loadKnockoutTournaments()
+        loadAnnouncements()
+    }
+
+    fun loadUserJoinedTournaments() {
+        val uid = currentUserId.value ?: return
+        viewModelScope.launch {
+            try {
+                val res = SupabaseClient.restApi.getUserTournamentParticipants(userQuery = "eq.$uid")
+                if (res.isSuccessful && res.body() != null) {
+                    val ids = res.body()!!.mapNotNull { it["tournament_id"] }
+                    if (ids.isNotEmpty()) {
+                        joinedTournamentIds.value = joinedTournamentIds.value + ids.toSet()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ViewModel", "Failed to load joined tournaments: ${e.message}")
+            }
+        }
+    }
+
+    fun loadAnnouncements() {
+        viewModelScope.launch {
+            try {
+                val res = SupabaseClient.restApi.getAnnouncements()
+                if (res.isSuccessful && res.body() != null) {
+                    activeAnnouncements.value = res.body()!!.filter { (it.status ?: "active") == "active" }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ViewModel", "Failed to load announcements: ${e.message}")
+            }
+        }
+    }
+
+    private fun isVersionHigher(v1: String, v2: String): Boolean {
+        val parts1 = v1.split(".").mapNotNull { it.toIntOrNull() }
+        val parts2 = v2.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLen = maxOf(parts1.size, parts2.size)
+        for (i in 0 until maxLen) {
+            val p1 = parts1.getOrElse(i) { 0 }
+            val p2 = parts2.getOrElse(i) { 0 }
+            if (p1 > p2) return true
+            if (p1 < p2) return false
+        }
+        return false
     }
 
     fun loadGameConfig() {
@@ -264,6 +326,25 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                                     questionsPerGame = qCount
                                 )
                             }
+                            "app_version" -> {
+                                val latest = (map["latest_version"] as? String) ?: (map["version"] as? String)
+                                val url = (map["download_url"] as? String) ?: (map["url"] as? String) ?: "https://ais-dev-cfcha536thi2azarfnw6uq-840513166105.asia-southeast1.run.app/app-debug.apk"
+                                val force = (map["force_update"] as? Boolean) ?: false
+                                if (!latest.isNullOrBlank()) {
+                                    val currentVer = com.example.BuildConfig.VERSION_NAME
+                                    if (isVersionHigher(latest, currentVer)) {
+                                        appUpdateConfig.value = AppUpdateConfig(latest, url, force)
+                                    }
+                                }
+                            }
+                            "home_buttons" -> {
+                                val curButtons = homeButtonsConfig.value
+                                val stText = (map["start_game_text"] as? String) ?: curButtons.startGameText
+                                val stSub = (map["start_game_subtext"] as? String) ?: curButtons.startGameSubtext
+                                val prText = (map["practice_text"] as? String) ?: curButtons.practiceText
+                                val prSub = (map["practice_subtext"] as? String) ?: curButtons.practiceSubtext
+                                homeButtonsConfig.value = HomeButtonsUi(stText, stSub, prText, prSub)
+                            }
                         }
                     }
                     _gameConfig.value = current
@@ -279,6 +360,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             repository.fetchAndSyncUserProfile(userId, null)
             refreshRecentSessions(userId)
+            loadUserJoinedTournaments()
         }
     }
 
@@ -562,9 +644,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                 sessionId = sessionId,
                 questionId = question.questionId,
                 answer = answer,
-                responseTimeMs = responseTimeMs,
-                expectedCorrectAnswer = question.correctAnswer,
-                currentScore = state.score
+                responseTimeMs = responseTimeMs
             )) {
                 is RpcResult.Ok -> {
                     val submitResp = res.value
@@ -588,7 +668,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                             isLocked = true,
                             selectedOption = answer,
                             lastIsCorrect = isCorrect,
-                            lastCorrectAnswer = submitResp.correctAnswer ?: question.correctAnswer,
+                            lastCorrectAnswer = submitResp.correctAnswer,
                             lastPointsEarned = submitResp.pointsEarned,
                             score = newScore,
                             correctAnswers = newCorrect,
@@ -605,7 +685,7 @@ class SpeedMathViewModel(application: Application) : AndroidViewModel(applicatio
                             isLocked = true,
                             selectedOption = answer,
                             lastIsCorrect = false,
-                            lastCorrectAnswer = submitResp.correctAnswer ?: question.correctAnswer,
+                            lastCorrectAnswer = submitResp.correctAnswer,
                             lastPointsEarned = 0,
                             questionsAnswered = newAnswered,
                             refundCredited = submitResp.refundApplied,

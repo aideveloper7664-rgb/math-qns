@@ -305,6 +305,9 @@ fun WithdrawScreen(
                 } else {
                     onWithdraw(amt, method, accountRef, accountHolder.trim()) { success ->
                         if (success) {
+                            amountText = ""
+                            upiId = ""
+                            accountHolder = ""
                             onBack()
                         }
                     }

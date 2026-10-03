@@ -30,6 +30,8 @@ import com.example.ui.theme.*
 fun HomeScreen(
     user: UserEntity?,
     recentSessions: List<GameSessionDto> = emptyList(),
+    announcements: List<com.example.data.remote.SupabaseAnnouncementDto> = emptyList(),
+    homeButtonsConfig: com.example.ui.viewmodel.HomeButtonsUi = com.example.ui.viewmodel.HomeButtonsUi(),
     onStartGame: () -> Unit,
     onNavigate: (String) -> Unit
 ) {
@@ -44,6 +46,58 @@ fun HomeScreen(
             .padding(horizontal = 16.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
     ) {
+        // ── 0. Announcements ────────────────────────────────────────────────
+        if (announcements.isNotEmpty()) {
+            items(announcements, key = { it.id }) { ann ->
+                val title = ann.title ?: "Announcement"
+                val msg = ann.message ?: ""
+                val isWarning = title.contains("Warning", ignoreCase = true) || title.contains("Maintenance", ignoreCase = true)
+                val isPromo = title.contains("Offer", ignoreCase = true) || title.contains("Bonus", ignoreCase = true) || title.contains("Promo", ignoreCase = true)
+
+                val bgColor = when {
+                    isWarning -> Color(0xFF331B1B)
+                    isPromo -> Color(0xFF1B3322)
+                    else -> Color(0xFF1B263B)
+                }
+                val borderColor = when {
+                    isWarning -> Color(0xFFFF5252)
+                    isPromo -> Color(0xFF4CAF50)
+                    else -> Color(0xFF448AFF)
+                }
+
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = bgColor),
+                    border = BorderStroke(1.dp, borderColor.copy(alpha = 0.6f)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = if (isWarning) "⚠️" else if (isPromo) "🎁" else "📢",
+                                fontSize = 16.sp
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = title,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                        }
+                        if (msg.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = msg,
+                                fontSize = 12.sp,
+                                color = TextMuted,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
         // ── 1. Profile Card ─────────────────────────────────────────────────
         item {
             Card(
@@ -200,13 +254,13 @@ fun HomeScreen(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "START GAME",
+                                text = homeButtonsConfig.startGameText,
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Black,
                                 color = Color.Black
                             )
                             Text(
-                                text = "Entry Fee: ₹10 • Progressive Quiz • Win up to 10×",
+                                text = homeButtonsConfig.startGameSubtext,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.Black.copy(alpha = 0.75f)
@@ -247,7 +301,7 @@ fun HomeScreen(
                     shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, CyanPrimary.copy(alpha = 0.5f))
                 ) {
-                    Text("🎯 Practice Mode (Free Play)", fontWeight = FontWeight.Bold, color = CyanPrimary, fontSize = 14.sp)
+                    Text(homeButtonsConfig.practiceText, fontWeight = FontWeight.Bold, color = CyanPrimary, fontSize = 14.sp)
                 }
             }
         }

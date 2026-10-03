@@ -78,6 +78,10 @@ class MainActivity : ComponentActivity() {
                 val joinedKnockoutIds by viewModel.joinedKnockoutIds.collectAsStateWithLifecycle()
                 val knockoutJoiningId by viewModel.knockoutJoiningId.collectAsStateWithLifecycle()
 
+                val appUpdateConfig by viewModel.appUpdateConfig.collectAsStateWithLifecycle()
+                val homeButtonsConfig by viewModel.homeButtonsConfig.collectAsStateWithLifecycle()
+                val activeAnnouncements by viewModel.activeAnnouncements.collectAsStateWithLifecycle()
+
                 var currentRoute by remember { mutableStateOf("home") }
                 var activeCheckoutUrl by remember { mutableStateOf<String?>(null) }
                 var activeDepositId by remember { mutableStateOf<String?>(null) }
@@ -234,6 +238,8 @@ class MainActivity : ComponentActivity() {
                                     "home" -> HomeScreen(
                                         user = currentUser,
                                         recentSessions = recentSessions,
+                                        announcements = activeAnnouncements,
+                                        homeButtonsConfig = homeButtonsConfig,
                                         onStartGame = {
                                             viewModel.requestPlay()
                                         },
@@ -415,12 +421,23 @@ class MainActivity : ComponentActivity() {
                                     else -> HomeScreen(
                                         user = currentUser,
                                         recentSessions = recentSessions,
+                                        announcements = activeAnnouncements,
+                                        homeButtonsConfig = homeButtonsConfig,
                                         onStartGame = {
                                             viewModel.requestPlay()
                                         },
                                         onNavigate = { target -> currentRoute = target }
                                     )
                                 }
+                            }
+
+                            appUpdateConfig?.let { config ->
+                                com.example.ui.components.UpdateDialog(
+                                    latestVersion = config.latestVersion,
+                                    downloadUrl = config.downloadUrl,
+                                    forceUpdate = config.forceUpdate,
+                                    onDismiss = { viewModel.appUpdateConfig.value = null }
+                                )
                             }
                         }
                     }

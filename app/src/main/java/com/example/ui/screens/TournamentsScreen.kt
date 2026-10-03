@@ -218,7 +218,11 @@ fun TournamentLiveCard(
             ) {
                 Column {
                     Text("ENTRY FEE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
-                    Text("₹$entryFeeVal", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    if (entryFeeVal == 0) {
+                        Text("🎁 FREE", fontSize = 16.sp, fontWeight = FontWeight.Black, color = GreenSuccess)
+                    } else {
+                        Text("₹$entryFeeVal", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    }
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("PLAYERS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TextMuted)
@@ -280,7 +284,7 @@ fun TournamentLiveCard(
                         )
                     } else {
                         Text(
-                            text = "🎯 JOIN (₹$entryFeeVal)",
+                            text = if (entryFeeVal == 0) "🎯 JOIN FREE" else "🎯 JOIN (₹$entryFeeVal)",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Black,
                             color = BgDark

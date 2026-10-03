@@ -237,8 +237,7 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                         "status" to "active",
                         "rank" to "Bronze",
                         "mmr" to 1000,
-                        "xp" to 0,
-                        "wallet_balance" to 0.0
+                        "xp" to 0
                     )
                     SupabaseClient.restApi.insertUserMap(
                         prefer = "resolution=merge-duplicates,return=representation",
@@ -255,8 +254,7 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
                         "status" to "active",
                         "rank" to "Bronze",
                         "mmr" to 1000,
-                        "xp" to 0,
-                        "wallet_balance" to 0.0
+                        "xp" to 0
                     )
                     SupabaseClient.restApi.insertUserMap(
                         prefer = "resolution=merge-duplicates,return=representation",
@@ -390,7 +388,11 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
             }
 
             // 6. Sync Notifications & Announcements
-            val notifRes = SupabaseClient.restApi.getNotifications()
+            val notifRes = if (!currentUserId.isNullOrBlank()) {
+                SupabaseClient.restApi.getNotifications(orQuery = "(target_group.eq.All users,target_user.eq.$currentUserId)")
+            } else {
+                SupabaseClient.restApi.getNotifications(orQuery = "(target_group.eq.All users)")
+            }
             if (notifRes.isSuccessful && notifRes.body() != null) {
                 val notifEntities = notifRes.body()!!.map { dto ->
                     NotificationEntity(
@@ -1132,101 +1134,6 @@ class SpeedMathRepository(private val dao: SpeedMathDao) {
         } catch (e: Exception) {
             Log.e("UploadPhoto", "Upload exception: ${e.message}", e)
             return@withContext RpcResult.Err(e.message ?: "Failed to upload photo")
-        }
-    }
-
-    suspend fun recordMatchResults(
-        userId: String,
-        mode: String,
-        entryFee: Double,
-        score: Int,
-        correctAnswers: Int,
-        totalQuestions: Int,
-        isPractice: Boolean
-    ): MatchParticipantEntity = withContext(Dispatchers.IO) {
-        val user = dao.getUserById(userId) ?: UserEntity("default", "user@example.com", "ProSolver")
-        val matchId = UUID.randomUUID().toString()
-
-        val won = !isPractice && (correctAnswers.toDouble() / totalQuestions) >= 0.6
-        val prize = if (won) entryFee * 1.8 else 0.0
-
-        val participant = MatchParticipantEntity(
-            id = UUID.randomUUID().toString(),
-            matchId = matchId,
-            userId = userId,
-            userName = user.displayName,
-            userPhoto = user.photoUrl,
-            userRank = user.rank,
-            score = score,
-            result = if (won) "WIN" else if (isPractice) "COMPLETED" else "LOSS"
-        )
-        dao.insertMatchParticipant(participant)
-
-        try {
-            SupabaseClient.restApi.postMatchParticipant(
-                SupabaseMatchParticipantDto(
-                    matchId = matchId,
-                    userId = userId,
-                    score = score,
-                    result = if (won) "WIN" else "LOSS"
-                )
-            )
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-
-        if (!isPractice) {
-            val mmrDelta = if (won) 25 else -15
-            val xpGained = score / 2 + 50
-            val newMmr = maxOf(100, user.mmr + mmrDelta)
-            val newRank = calculateRank(newMmr)
-            val newWins = if (won) user.wins + 1 else user.wins
-            val newLosses = if (!won) user.losses + 1 else user.losses
-            val newMatches = user.matchesPlayed + 1
-            val newWinnings = user.totalWinnings + prize
-            val newWallet = maxOf(0.0, user.walletBalance + prize - entryFee)
-
-            val updatedUser = user.copy(
-                mmr = newMmr,
-                rank = newRank,
-                xp = user.xp + xpGained,
-                matchesPlayed = newMatches,
-                wins = newWins,
-                losses = newLosses,
-                totalWinnings = newWinnings,
-                walletBalance = newWallet
-            )
-            dao.updateUser(updatedUser)
-
-            try {
-                SupabaseClient.restApi.updateUser("eq.$userId", updates = mapOf(
-                    "mmr" to newMmr,
-                    "rank" to newRank,
-                    "xp" to user.xp + xpGained,
-                    "matches_played" to newMatches,
-                    "wins" to newWins,
-                    "losses" to newLosses,
-                    "total_winnings" to newWinnings,
-                    "wallet_balance" to newWallet
-                ))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-
-        return@withContext participant
-    }
-
-    private fun calculateRank(mmr: Int): String {
-        return when {
-            mmr >= 2500 -> "Legend"
-            mmr >= 2200 -> "Grandmaster"
-            mmr >= 1900 -> "Master"
-            mmr >= 1600 -> "Diamond"
-            mmr >= 1400 -> "Platinum"
-            mmr >= 1200 -> "Gold"
-            mmr >= 1050 -> "Silver"
-            else -> "Bronze"
         }
     }
 }
